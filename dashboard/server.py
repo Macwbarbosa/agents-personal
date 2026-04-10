@@ -15,16 +15,19 @@ import subprocess
 import threading
 import time
 import urllib.parse
+from email.message import EmailMessage
+from email.utils import getaddresses, parseaddr
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 import webbrowser
+import base64
 
 try:
     from .env_loader import load_dotenv
-    from .sync import collect_dashboard_snapshot, get_dataset_payload
+    from .sync import collect_dashboard_snapshot, get_dataset_payload, get_google_services
 except ImportError:
     from env_loader import load_dotenv
-    from sync import collect_dashboard_snapshot, get_dataset_payload
+    from sync import collect_dashboard_snapshot, get_dataset_payload, get_google_services
 
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT.parent / ".env")
@@ -214,6 +217,133 @@ def run_sync() -> dict:
     }
 
 
+def normalize_reply_subject(subject: str) -> str:
+    text = (subject or "").strip() or "(sem assunto)"
+    return text if text.lower().startswith("re:") else f"Re: {text}"
+
+
+def extract_email_addresses(header_value: str) -> list[str]:
+    if not header_value:
+        return []
+    seen = set()
+    result = []
+    for _name, email in getaddresses([header_value]):
+        normalized = (email or "").strip().lower()
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            result.append(normalized)
+    return result
+
+
+def get_gmail_profile_address(gmail) -> str:
+    profile = gmail.users().getProfile(userId="me").execute()
+    return (profile.get("emailAddress") or "").strip().lower()
+
+
+def build_reply_quote(original_email: dict) -> str:
+    lines = []
+    date = (original_email.get("date") or "").strip()
+    author = (original_email.get("from") or "").strip() or "alguém"
+    subject = (original_email.get("subject") or "").strip() or "(sem assunto)"
+    to_line = (original_email.get("to") or "").strip()
+    cc_line = (original_email.get("cc") or "").strip()
+    body = (original_email.get("body_text") or original_email.get("snippet") or "").strip()
+
+    intro = "Em uma mensagem anterior"
+    if date:
+        intro = f"Em {date}"
+    lines.append(f"{intro}, {author} escreveu:")
+    if to_line:
+        lines.append(f"Para: {to_line}")
+    if cc_line:
+        lines.append(f"Cc: {cc_line}")
+    lines.append(f"Assunto: {subject}")
+    if body:
+        lines.append("")
+        lines.extend(f"> {line}" if line else ">" for line in body.splitlines())
+    return "\n".join(lines).strip()
+
+
+def send_gmail_reply(original_email: dict, reply_text: str, *, reply_all: bool = False) -> dict:
+    gmail, _calendar = get_google_services()
+    if not gmail:
+        raise RuntimeError("Gmail não está configurado no servidor")
+
+    body_text = (reply_text or "").strip()
+    if not body_text:
+        raise RuntimeError("Resposta vazia")
+
+    to_header = (original_email.get("reply_to") or original_email.get("from") or "").strip()
+    recipient = parseaddr(to_header)[1]
+    if not recipient:
+        raise RuntimeError("Não foi possível determinar o destinatário da resposta")
+
+    my_email = get_gmail_profile_address(gmail)
+    cc_recipients = []
+    if reply_all:
+        for candidate in extract_email_addresses(original_email.get("to", "")) + extract_email_addresses(
+            original_email.get("cc", "")
+        ):
+            if candidate not in (my_email, recipient.lower()) and candidate not in cc_recipients:
+                cc_recipients.append(candidate)
+
+    message = EmailMessage()
+    message["To"] = recipient
+    if cc_recipients:
+        message["Cc"] = ", ".join(cc_recipients)
+    message["Subject"] = normalize_reply_subject(original_email.get("subject", ""))
+
+    message_id = (original_email.get("message_id") or "").strip()
+    references = (original_email.get("references") or "").strip()
+    if message_id:
+        message["In-Reply-To"] = message_id
+        combined_references = f"{references} {message_id}".strip() if references else message_id
+        message["References"] = combined_references
+
+    quote = build_reply_quote(original_email)
+    composed = body_text
+    if quote:
+        composed = f"{body_text}\n\n{quote}"
+
+    message.set_content(composed)
+
+    raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
+    payload = {"raw": raw}
+    thread_id = (original_email.get("thread_id") or "").strip()
+    if thread_id:
+        payload["threadId"] = thread_id
+
+    return gmail.users().messages().send(userId="me", body=payload).execute()
+
+
+def send_gmail_message(to_header: str, subject: str, body_text: str, *, cc_header: str = "") -> dict:
+    gmail, _calendar = get_google_services()
+    if not gmail:
+        raise RuntimeError("Gmail não está configurado no servidor")
+
+    to_addresses = extract_email_addresses(to_header)
+    cc_addresses = extract_email_addresses(cc_header)
+    clean_subject = (subject or "").strip()
+    clean_body = (body_text or "").strip()
+
+    if not to_addresses:
+        raise RuntimeError("Informe pelo menos um destinatário")
+    if not clean_subject:
+        raise RuntimeError("Informe o assunto do email")
+    if not clean_body:
+        raise RuntimeError("Escreva a mensagem antes de enviar")
+
+    message = EmailMessage()
+    message["To"] = ", ".join(to_addresses)
+    if cc_addresses:
+        message["Cc"] = ", ".join(cc_addresses)
+    message["Subject"] = clean_subject
+    message.set_content(clean_body)
+
+    raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
+    return gmail.users().messages().send(userId="me", body={"raw": raw}).execute()
+
+
 class DashboardHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -261,6 +391,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
         if route_path == "/api/bitrix/action":
             self._bitrix_action()
+            return
+        if route_path == "/api/email/reply":
+            self._email_reply()
+            return
+        if route_path == "/api/email/send":
+            self._email_send()
             return
         self.send_error(404)
 
@@ -416,6 +552,53 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 {
                     "ok": True,
                     "message": f"Ação '{action}' executada no Bitrix",
+                    "last_sync": snapshot.get("meta", {}).get("last_sync"),
+                },
+            )
+        except Exception as e:
+            json_response(self, 500, {"ok": False, "error": str(e)})
+
+    def _email_reply(self):
+        try:
+            payload = parse_json_body(self)
+            original_email = payload.get("original_email") or {}
+            reply_text = payload.get("reply_text") or ""
+            reply_all = bool(payload.get("reply_all"))
+
+            send_result = send_gmail_reply(original_email, reply_text, reply_all=reply_all)
+            snapshot = refresh_snapshot()
+            json_response(
+                self,
+                200,
+                {
+                    "ok": True,
+                    "message": "Resposta enviada pelo Gmail",
+                    "gmail_id": send_result.get("id"),
+                    "thread_id": send_result.get("threadId"),
+                    "last_sync": snapshot.get("meta", {}).get("last_sync"),
+                },
+            )
+        except Exception as e:
+            json_response(self, 500, {"ok": False, "error": str(e)})
+
+    def _email_send(self):
+        try:
+            payload = parse_json_body(self)
+            send_result = send_gmail_message(
+                payload.get("to") or "",
+                payload.get("subject") or "",
+                payload.get("body") or "",
+                cc_header=payload.get("cc") or "",
+            )
+            snapshot = refresh_snapshot()
+            json_response(
+                self,
+                200,
+                {
+                    "ok": True,
+                    "message": "Email enviado pelo Gmail",
+                    "gmail_id": send_result.get("id"),
+                    "thread_id": send_result.get("threadId"),
                     "last_sync": snapshot.get("meta", {}).get("last_sync"),
                 },
             )

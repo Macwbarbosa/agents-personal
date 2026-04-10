@@ -7,6 +7,8 @@ const API_BITRIX_ACCESS = "/api/bitrix/access";
 const API_BITRIX_UPDATE = "/api/bitrix/update";
 const API_BITRIX_COMMENT = "/api/bitrix/comment";
 const API_BITRIX_ACTION = "/api/bitrix/action";
+const API_EMAIL_REPLY = "/api/email/reply";
+const API_EMAIL_SEND = "/api/email/send";
 
 const $ = (id) => document.getElementById(id);
 let bitrixPayloadCache = null;
@@ -16,6 +18,7 @@ const emailCache = {
   inbox: {},
   sent: {},
 };
+let activeEmailModal = null;
 
 /* ---------- Utilitários ---------- */
 
@@ -165,6 +168,41 @@ function textToHTML(text) {
   return escapeHTML(text || "").replace(/\n/g, "<br>");
 }
 
+function ensureEmailReplyUI() {
+  const modalCard = document.querySelector("#email-modal .modal-card");
+  if (!modalCard) return false;
+
+  let replyBox = $("email-reply-box");
+  if (!replyBox) {
+    modalCard.insertAdjacentHTML(
+      "beforeend",
+      `
+      <div id="email-reply-box" class="email-reply-box hidden">
+        <div class="email-reply-head">
+          <div class="email-reply-title">Responder pelo dashboard</div>
+          <div id="email-reply-target" class="email-reply-target"></div>
+        </div>
+        <textarea
+          id="email-reply-input"
+          class="email-reply-input"
+          placeholder="Escreva sua resposta aqui…"
+        ></textarea>
+        <div class="email-reply-actions">
+          <div id="email-reply-feedback" class="email-reply-feedback"></div>
+          <div class="email-reply-buttons">
+            <button id="email-reply-send" class="modal-send-btn secondary" type="button">Responder</button>
+            <button id="email-reply-all-send" class="modal-send-btn" type="button">Responder a todos</button>
+          </div>
+        </div>
+      </div>
+    `
+    );
+    replyBox = $("email-reply-box");
+  }
+
+  return Boolean(replyBox && $("email-reply-input") && $("email-reply-send") && $("email-reply-all-send"));
+}
+
 function cacheEmails(kind, emails) {
   emailCache[kind] = {};
   (emails || []).forEach((email) => {
@@ -177,8 +215,16 @@ function cacheEmails(kind, emails) {
 function openEmailModal(kind, emailId) {
   const email = emailCache[kind]?.[String(emailId)];
   if (!email) return;
+  ensureEmailReplyUI();
+  const modal = $("email-modal");
+  const subject = $("email-modal-subject");
+  const meta = $("email-modal-meta");
+  const bodyEl = $("email-modal-body");
+  if (!modal || !subject || !meta || !bodyEl) return;
 
-  $("email-modal-subject").textContent = email.subject || "(sem assunto)";
+  activeEmailModal = { kind, email };
+
+  subject.textContent = email.subject || "(sem assunto)";
 
   const metaParts = [];
   if (kind === "sent") {
@@ -187,22 +233,169 @@ function openEmailModal(kind, emailId) {
     metaParts.push(`De: ${email.from || "—"}`);
   }
   if (email.date) metaParts.push(email.date);
-  $("email-modal-meta").textContent = metaParts.join(" · ");
+  meta.textContent = metaParts.join(" · ");
 
   const body = email.body_text || email.snippet || "Sem conteúdo disponível.";
-  $("email-modal-body").innerHTML = textToHTML(body);
+  bodyEl.innerHTML = textToHTML(body);
 
-  const modal = $("email-modal");
+  const replyBox = $("email-reply-box");
+  const replyInput = $("email-reply-input");
+  const replyFeedback = $("email-reply-feedback");
+  const replyTarget = $("email-reply-target");
+  const replyButton = $("email-reply-send");
+  const replyAllButton = $("email-reply-all-send");
+  const canReply =
+    kind === "inbox" &&
+    replyBox &&
+    replyInput &&
+    replyFeedback &&
+    replyTarget &&
+    replyButton &&
+    replyAllButton;
+
+  if (replyBox && replyInput && replyFeedback && replyTarget && replyButton && replyAllButton) {
+    replyBox.classList.toggle("hidden", !canReply);
+    replyInput.value = "";
+    replyFeedback.textContent = "";
+    replyFeedback.className = "email-reply-feedback";
+    replyButton.disabled = false;
+    replyAllButton.disabled = false;
+
+    if (canReply) {
+      replyTarget.textContent = email.reply_to || email.from || "destinatário desconhecido";
+      window.setTimeout(() => replyInput.focus(), 40);
+    }
+  }
+
   modal.classList.remove("hidden");
   modal.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
 }
 
 function closeEmailModal() {
+  activeEmailModal = null;
   const modal = $("email-modal");
+  if (!modal) return;
   modal.classList.add("hidden");
   modal.setAttribute("aria-hidden", "true");
   document.body.classList.remove("modal-open");
+}
+
+async function sendEmailReply() {
+  return sendEmailReplyMode(false);
+}
+
+async function sendEmailReplyAll() {
+  return sendEmailReplyMode(true);
+}
+
+async function sendEmailReplyMode(replyAll) {
+  if (!activeEmailModal?.email || activeEmailModal.kind !== "inbox") return;
+
+  const replyInput = $("email-reply-input");
+  const replyFeedback = $("email-reply-feedback");
+  const replyButton = $("email-reply-send");
+  const replyAllButton = $("email-reply-all-send");
+  if (!replyInput || !replyFeedback || !replyButton || !replyAllButton) return;
+  const replyText = replyInput.value.trim();
+
+  if (!replyText) {
+    replyFeedback.textContent = "Escreva a resposta antes de enviar.";
+    replyFeedback.className = "email-reply-feedback err";
+    replyInput.focus();
+    return;
+  }
+
+  try {
+    replyButton.disabled = true;
+    replyAllButton.disabled = true;
+    replyFeedback.textContent = "Enviando resposta…";
+    replyFeedback.className = "email-reply-feedback";
+
+    await postJSON(API_EMAIL_REPLY, {
+      original_email: activeEmailModal.email,
+      reply_text: replyText,
+      reply_all: replyAll,
+    });
+
+    replyInput.value = "";
+    replyFeedback.textContent = replyAll ? "Resposta para todos enviada." : "Resposta enviada.";
+    replyFeedback.className = "email-reply-feedback ok";
+    await loadAll();
+  } catch (error) {
+    console.error(error);
+    replyFeedback.textContent = error.message || "Falha ao enviar resposta.";
+    replyFeedback.className = "email-reply-feedback err";
+  } finally {
+    replyButton.disabled = false;
+    replyAllButton.disabled = false;
+  }
+}
+
+function openComposeModal() {
+  const modal = $("compose-modal");
+  const toInput = $("compose-to");
+  const ccInput = $("compose-cc");
+  const subjectInput = $("compose-subject");
+  const bodyInput = $("compose-body");
+  const feedback = $("compose-feedback");
+  const sendButton = $("compose-send");
+  if (!modal || !toInput || !ccInput || !subjectInput || !bodyInput || !feedback || !sendButton) return;
+
+  toInput.value = "";
+  ccInput.value = "";
+  subjectInput.value = "";
+  bodyInput.value = "";
+  feedback.textContent = "";
+  feedback.className = "email-reply-feedback";
+  sendButton.disabled = false;
+
+  modal.classList.remove("hidden");
+  modal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+  window.setTimeout(() => toInput.focus(), 40);
+}
+
+function closeComposeModal() {
+  const modal = $("compose-modal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  modal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
+}
+
+async function sendNewEmail() {
+  const toInput = $("compose-to");
+  const ccInput = $("compose-cc");
+  const subjectInput = $("compose-subject");
+  const bodyInput = $("compose-body");
+  const feedback = $("compose-feedback");
+  const sendButton = $("compose-send");
+  if (!toInput || !ccInput || !subjectInput || !bodyInput || !feedback || !sendButton) return;
+
+  try {
+    sendButton.disabled = true;
+    feedback.textContent = "Enviando email…";
+    feedback.className = "email-reply-feedback";
+
+    await postJSON(API_EMAIL_SEND, {
+      to: toInput.value,
+      cc: ccInput.value,
+      subject: subjectInput.value,
+      body: bodyInput.value,
+    });
+
+    feedback.textContent = "Email enviado.";
+    feedback.className = "email-reply-feedback ok";
+    await loadAll();
+    window.setTimeout(closeComposeModal, 500);
+  } catch (error) {
+    console.error(error);
+    feedback.textContent = error.message || "Falha ao enviar email.";
+    feedback.className = "email-reply-feedback err";
+  } finally {
+    sendButton.disabled = false;
+  }
 }
 
 function bitrixAccessFor(taskId) {
@@ -815,6 +1008,7 @@ function initBitrixActions() {
 }
 
 function initEmailModal() {
+  ensureEmailReplyUI();
   document.addEventListener("click", (event) => {
     const trigger = event.target.closest("[data-email-id][data-email-kind]");
     if (trigger) {
@@ -827,14 +1021,56 @@ function initEmailModal() {
       event.target.id === "email-modal-overlay"
     ) {
       closeEmailModal();
+      return;
+    }
+
+    if (
+      event.target.id === "compose-modal-close" ||
+      event.target.id === "compose-modal-overlay"
+    ) {
+      closeComposeModal();
     }
   });
 
   document.addEventListener("keydown", (event) => {
+    if (
+      event.key === "Enter" &&
+      (event.metaKey || event.ctrlKey) &&
+      document.activeElement?.id === "email-reply-input"
+    ) {
+      sendEmailReply();
+      return;
+    }
+    if (
+      event.key === "Enter" &&
+      (event.metaKey || event.ctrlKey) &&
+      document.activeElement?.id === "compose-body"
+    ) {
+      sendNewEmail();
+      return;
+    }
     if (event.key === "Escape") {
       closeEmailModal();
+      closeComposeModal();
     }
   });
+
+  const sendButton = $("email-reply-send");
+  if (sendButton) {
+    sendButton.addEventListener("click", sendEmailReply);
+  }
+  const sendAllButton = $("email-reply-all-send");
+  if (sendAllButton) {
+    sendAllButton.addEventListener("click", sendEmailReplyAll);
+  }
+  const newEmailButton = $("new-email-btn");
+  if (newEmailButton) {
+    newEmailButton.addEventListener("click", openComposeModal);
+  }
+  const composeSendButton = $("compose-send");
+  if (composeSendButton) {
+    composeSendButton.addEventListener("click", sendNewEmail);
+  }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
