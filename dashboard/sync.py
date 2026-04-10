@@ -9,6 +9,8 @@ Uso:
     uv run --with google-api-python-client --with google-auth sync.py
 """
 
+import base64
+import html
 import json
 import os
 import re
@@ -20,7 +22,10 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from env_loader import load_dotenv
+try:
+    from .env_loader import load_dotenv
+except ImportError:
+    from env_loader import load_dotenv
 
 # Caminhos principais
 ROOT = Path(__file__).resolve().parent.parent
@@ -36,8 +41,10 @@ GOOGLE_CREDS = Path(
     )
 )
 BITRIX_TASKS_WEBHOOK_URL = os.getenv("BITRIX_TASKS_WEBHOOK_URL", "")
+BITRIX_WEBHOOK_BASE_URL = os.getenv("BITRIX_WEBHOOK_BASE_URL", "")
 BITRIX_PAGE_SIZE = 50
 BITRIX_MAX_PAGES = 20
+BITRIX_COMMENTS_PER_TASK = 5
 
 BITRIX_STATUS_LABELS = {
     "2": "A fazer",
@@ -48,6 +55,18 @@ BITRIX_STATUS_LABELS = {
 }
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+DATASET_NAMES = (
+    "meta",
+    "pending",
+    "projects",
+    "people",
+    "agents",
+    "emails_inbox",
+    "emails_sent",
+    "calendar",
+    "bitrix_tasks",
+)
 
 
 def write_json(name: str, data) -> None:
@@ -184,11 +203,24 @@ def get_google_services():
         print("[aviso] google-api-python-client não instalado, pulando Gmail/Calendar")
         return None, None
 
-    if not GOOGLE_CREDS.exists():
-        print(f"[aviso] credenciais não encontradas em {GOOGLE_CREDS}")
+    raw = None
+    raw_env = os.getenv("GOOGLE_CREDS_JSON", "").strip()
+    creds_from_env = bool(raw_env)
+    if raw_env:
+        try:
+            raw = json.loads(raw_env)
+        except json.JSONDecodeError as e:
+            print(f"[erro] GOOGLE_CREDS_JSON invalido: {e}")
+            return None, None
+    elif GOOGLE_CREDS.exists():
+        raw = json.loads(GOOGLE_CREDS.read_text())
+    else:
+        print(
+            "[aviso] credenciais nao encontradas em GOOGLE_CREDS_JSON "
+            f"nem em {GOOGLE_CREDS}"
+        )
         return None, None
 
-    raw = json.loads(GOOGLE_CREDS.read_text())
     creds = Credentials(
         token=raw.get("token"),
         refresh_token=raw.get("refresh_token"),
@@ -204,7 +236,8 @@ def get_google_services():
                 creds.refresh(Request())
                 raw["token"] = creds.token
                 raw["expiry"] = creds.expiry.isoformat() if creds.expiry else None
-                GOOGLE_CREDS.write_text(json.dumps(raw, indent=2))
+                if not creds_from_env:
+                    GOOGLE_CREDS.write_text(json.dumps(raw, indent=2))
             except Exception as e:
                 print(f"[erro] refresh falhou: {e}")
                 return None, None
@@ -226,17 +259,19 @@ def fetch_emails(gmail, max_results: int = 10) -> list:
         emails = []
         for msg in messages:
             detail = gmail.users().messages().get(
-                userId="me", id=msg["id"], format="metadata",
-                metadataHeaders=["From", "Subject", "Date"],
+                userId="me", id=msg["id"], format="full",
             ).execute()
             headers = {h["name"]: h["value"] for h in detail.get("payload", {}).get("headers", [])}
             emails.append({
                 "id": msg["id"],
+                "thread_id": detail.get("threadId", ""),
                 "from": headers.get("From", ""),
+                "to": headers.get("To", ""),
                 "subject": headers.get("Subject", "(sem assunto)"),
                 "date": headers.get("Date", ""),
                 "snippet": detail.get("snippet", ""),
                 "unread": "UNREAD" in detail.get("labelIds", []),
+                "body_text": extract_gmail_body_text(detail.get("payload") or {}),
             })
         return emails
     except Exception as e:
@@ -256,21 +291,74 @@ def fetch_sent_emails(gmail, max_results: int = 5) -> list:
         emails = []
         for msg in messages:
             detail = gmail.users().messages().get(
-                userId="me", id=msg["id"], format="metadata",
-                metadataHeaders=["To", "Subject", "Date"],
+                userId="me", id=msg["id"], format="full",
             ).execute()
             headers = {h["name"]: h["value"] for h in detail.get("payload", {}).get("headers", [])}
             emails.append({
                 "id": msg["id"],
+                "thread_id": detail.get("threadId", ""),
+                "from": headers.get("From", ""),
                 "to": headers.get("To", ""),
                 "subject": headers.get("Subject", "(sem assunto)"),
                 "date": headers.get("Date", ""),
                 "snippet": detail.get("snippet", ""),
+                "body_text": extract_gmail_body_text(detail.get("payload") or {}),
             })
         return emails
     except Exception as e:
         print(f"[erro] sent: {e}")
         return []
+
+
+def decode_gmail_body(data: str) -> str:
+    if not data:
+        return ""
+    try:
+        raw = base64.urlsafe_b64decode(data.encode("utf-8"))
+        return raw.decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+
+
+def html_to_text(source: str) -> str:
+    if not source:
+        return ""
+    text = re.sub(r"(?is)<(script|style).*?>.*?</\\1>", "", source)
+    text = re.sub(r"(?i)<br\\s*/?>", "\n", text)
+    text = re.sub(r"(?i)</p>", "\n\n", text)
+    text = re.sub(r"(?i)</div>", "\n", text)
+    text = re.sub(r"(?s)<[^>]+>", "", text)
+    text = html.unescape(text)
+    text = text.replace("\r", "")
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def extract_gmail_body_text(payload: dict) -> str:
+    plain_parts = []
+    html_parts = []
+
+    def walk(part: dict):
+        mime_type = (part.get("mimeType") or "").lower()
+        body_data = ((part.get("body") or {}).get("data") or "")
+        decoded = decode_gmail_body(body_data)
+
+        if decoded:
+            if mime_type == "text/plain":
+                plain_parts.append(decoded)
+            elif mime_type == "text/html":
+                html_parts.append(decoded)
+
+        for child in part.get("parts", []) or []:
+            walk(child)
+
+    walk(payload or {})
+
+    if plain_parts:
+        return "\n\n".join(part.strip() for part in plain_parts if part.strip()).strip()
+    if html_parts:
+        return html_to_text("\n".join(html_parts))
+    return ""
 
 
 def fetch_calendar(calendar, days_ahead: int = 7) -> list:
@@ -346,10 +434,56 @@ def fetch_remote_json(url: str) -> dict:
             return json.load(response)
 
 
+def build_bitrix_method_url(base_url: str, method_name: str) -> str:
+    base = (base_url or "").strip()
+    if not base:
+        return ""
+    if not base.endswith("/"):
+        base += "/"
+    return f"{base}{method_name}"
+
+
 def build_bitrix_task_url(portal_base: str, task_id: str, responsible_id: str) -> str:
     if not portal_base or not task_id or not responsible_id:
         return ""
     return f"{portal_base}/company/personal/user/{responsible_id}/tasks/task/view/{task_id}/"
+
+
+def fetch_bitrix_comments(task_id: str) -> list[dict]:
+    """Busca comentarios legados da tarefa no Bitrix."""
+    base_url = (BITRIX_WEBHOOK_BASE_URL or "").strip()
+    if not base_url:
+        return []
+
+    comments_url = build_bitrix_method_url(base_url, "task.commentitem.getlist")
+    if not comments_url:
+        return []
+
+    try:
+        query = urlencode(
+            {
+                "TASKID": task_id,
+                "ORDER[POST_DATE]": "desc",
+            }
+        )
+        payload = fetch_remote_json(f"{comments_url}?{query}")
+        items = payload.get("result") if isinstance(payload.get("result"), list) else []
+        comments = []
+        for item in items[:BITRIX_COMMENTS_PER_TASK]:
+            comments.append(
+                {
+                    "id": str(item.get("ID") or ""),
+                    "author_id": str(item.get("AUTHOR_ID") or ""),
+                    "author_name": item.get("AUTHOR_NAME") or "Alguem",
+                    "author_email": item.get("AUTHOR_EMAIL") or "",
+                    "message": item.get("POST_MESSAGE") or "",
+                    "created_at": item.get("POST_DATE") or "",
+                }
+            )
+        return comments
+    except Exception as e:
+        print(f"[aviso] comentarios Bitrix task {task_id}: {e}")
+        return []
 
 
 def normalize_bitrix_task(task: dict, portal_base: str) -> dict:
@@ -361,6 +495,8 @@ def normalize_bitrix_task(task: dict, portal_base: str) -> dict:
     responsible_id = str(
         task.get("responsibleId") or responsible.get("id") or ""
     ).strip()
+
+    comments = fetch_bitrix_comments(task_id)
 
     return {
         "id": task_id,
@@ -376,6 +512,8 @@ def normalize_bitrix_task(task: dict, portal_base: str) -> dict:
         "creator_name": creator.get("name") or "",
         "responsible_name": responsible.get("name") or "",
         "url": build_bitrix_task_url(portal_base, task_id, responsible_id),
+        "comments": comments,
+        "comments_count": len(comments),
     }
 
 
@@ -456,30 +594,17 @@ def fetch_bitrix_tasks() -> dict:
 
 # ========= MAIN =========
 
-def main():
-    print("Sincronizando dados do dashboard...")
-
+def collect_dashboard_snapshot() -> dict:
     pending = parse_pending()
     projects = parse_projects()
     people = parse_people()
     agents = parse_agents()
-
-    print(f"  memoria: {len(pending)} tarefas, {len(projects)} projetos, {len(people)} pessoas, {len(agents)} agentes")
 
     gmail, calendar = get_google_services()
     emails_inbox = fetch_emails(gmail) if gmail else []
     emails_sent = fetch_sent_emails(gmail) if gmail else []
     events = fetch_calendar(calendar) if calendar else []
     bitrix_tasks = fetch_bitrix_tasks()
-
-    print(f"  google: {len(emails_inbox)} inbox, {len(emails_sent)} enviados, {len(events)} eventos")
-    if bitrix_tasks["configured"]:
-        print(
-            "  bitrix:"
-            f" {bitrix_tasks['open_count']} abertas, {bitrix_tasks['completed_count']} concluidas"
-        )
-    else:
-        print("  bitrix: webhook nao configurado")
 
     unread_count = sum(1 for e in emails_inbox if e["unread"])
     pending_count = sum(1 for t in pending if not t["done"])
@@ -508,15 +633,61 @@ def main():
         },
     }
 
-    write_json("meta", meta)
-    write_json("pending", pending)
-    write_json("projects", projects)
-    write_json("people", people)
-    write_json("agents", agents)
-    write_json("emails_inbox", emails_inbox)
-    write_json("emails_sent", emails_sent)
-    write_json("calendar", events)
-    write_json("bitrix_tasks", bitrix_tasks)
+    return {
+        "meta": meta,
+        "pending": pending,
+        "projects": projects,
+        "people": people,
+        "agents": agents,
+        "emails_inbox": emails_inbox,
+        "emails_sent": emails_sent,
+        "calendar": events,
+        "bitrix_tasks": bitrix_tasks,
+    }
+
+
+def write_snapshot(snapshot: dict) -> None:
+    for name in DATASET_NAMES:
+        write_json(name, snapshot.get(name))
+
+
+def get_dataset_payload(name: str, snapshot: dict | None = None):
+    if name not in DATASET_NAMES:
+        raise KeyError(name)
+    source = snapshot if snapshot is not None else collect_dashboard_snapshot()
+    return source[name]
+
+
+def main():
+    print("Sincronizando dados do dashboard...")
+
+    snapshot = collect_dashboard_snapshot()
+    pending = snapshot["pending"]
+    projects = snapshot["projects"]
+    people = snapshot["people"]
+    agents = snapshot["agents"]
+    emails_inbox = snapshot["emails_inbox"]
+    emails_sent = snapshot["emails_sent"]
+    events = snapshot["calendar"]
+    bitrix_tasks = snapshot["bitrix_tasks"]
+
+    print(
+        f"  memoria: {len(pending)} tarefas, {len(projects)} projetos,"
+        f" {len(people)} pessoas, {len(agents)} agentes"
+    )
+    print(
+        f"  google: {len(emails_inbox)} inbox, {len(emails_sent)} enviados,"
+        f" {len(events)} eventos"
+    )
+    if bitrix_tasks["configured"]:
+        print(
+            "  bitrix:"
+            f" {bitrix_tasks['open_count']} abertas, {bitrix_tasks['completed_count']} concluidas"
+        )
+    else:
+        print("  bitrix: webhook nao configurado")
+
+    write_snapshot(snapshot)
 
     print("Sync completo.")
     return 0

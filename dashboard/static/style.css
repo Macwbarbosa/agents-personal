@@ -41,6 +41,10 @@ body {
   min-height: 100vh;
 }
 
+body.modal-open {
+  overflow: hidden;
+}
+
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; cursor: pointer; border: none; background: none; }
 
@@ -322,6 +326,11 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   transform: translateX(2px);
 }
 
+.list-item-button {
+  width: 100%;
+  text-align: left;
+}
+
 .list-dot {
   width: 8px;
   height: 8px;
@@ -512,6 +521,64 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   opacity: 0.75;
 }
 
+.bitrix-comments {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.bitrix-comments-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-light);
+  margin-bottom: 8px;
+}
+
+.bitrix-comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bitrix-comment-bubble {
+  background: #fafbff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+
+.bitrix-comment-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.bitrix-comment-author {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.bitrix-comment-date {
+  color: var(--text-light);
+  white-space: nowrap;
+}
+
+.bitrix-comment-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bitrix-comments-empty {
+  font-size: 12px;
+  color: var(--text-light);
+}
+
 .list-item.done .list-title {
   text-decoration: line-through;
   color: var(--text-light);
@@ -529,6 +596,80 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   background: var(--surface);
   border: 1px dashed var(--border);
   border-radius: var(--radius-sm);
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.48);
+  backdrop-filter: blur(4px);
+}
+
+.modal-card {
+  position: relative;
+  width: min(860px, 100%);
+  max-height: 86vh;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.modal-subtitle {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.modal-close {
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.modal-body {
+  padding: 22px;
+  max-height: calc(86vh - 90px);
+  overflow: auto;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text);
+  white-space: normal;
 }
 
 /* ========= CARD GRID (projects, agents, team) ========= */
@@ -633,6 +774,13 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   }
   .nav { flex-direction: row; padding-top: 0; overflow-x: auto; }
   .sidebar-footer { border-top: none; padding-top: 0; border-left: 1px solid var(--border); padding-left: 16px; }
+  .modal {
+    padding: 14px;
+  }
+  .modal-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
   .bitrix-form-row {
     flex-direction: column;
     align-items: stretch;

@@ -1,6 +1,7 @@
 /* ========= Sr. Bazinga Dashboard ========= */
 
 const DATA_BASE = "/data";
+const API_BOOTSTRAP = "/api/bootstrap";
 const API_SYNC = "/api/sync";
 const API_BITRIX_ACCESS = "/api/bitrix/access";
 const API_BITRIX_UPDATE = "/api/bitrix/update";
@@ -11,6 +12,10 @@ const $ = (id) => document.getElementById(id);
 let bitrixPayloadCache = null;
 const bitrixAccessCache = {};
 const bitrixAccessPending = new Set();
+const emailCache = {
+  inbox: {},
+  sent: {},
+};
 
 /* ---------- Utilitários ---------- */
 
@@ -75,6 +80,22 @@ async function loadJSON(name) {
   }
 }
 
+async function loadBootstrap() {
+  const r = await fetch(API_BOOTSTRAP, { cache: "no-store" });
+  let data = null;
+  try {
+    data = await r.json();
+  } catch {
+    data = null;
+  }
+
+  if (!r.ok || !data?.ok || !data?.datasets) {
+    throw new Error("Falha ao carregar os dados do dashboard");
+  }
+
+  return data.datasets;
+}
+
 async function postJSON(url, payload) {
   const r = await fetch(url, {
     method: "POST",
@@ -133,6 +154,55 @@ function localInputValueToIso(value) {
   const d = new Date(value);
   if (isNaN(d)) return "";
   return d.toISOString();
+}
+
+function buildGmailMessageUrl(messageId) {
+  if (!messageId) return "";
+  return `https://mail.google.com/mail/u/0/#all/${encodeURIComponent(messageId)}`;
+}
+
+function textToHTML(text) {
+  return escapeHTML(text || "").replace(/\n/g, "<br>");
+}
+
+function cacheEmails(kind, emails) {
+  emailCache[kind] = {};
+  (emails || []).forEach((email) => {
+    if (email?.id) {
+      emailCache[kind][String(email.id)] = email;
+    }
+  });
+}
+
+function openEmailModal(kind, emailId) {
+  const email = emailCache[kind]?.[String(emailId)];
+  if (!email) return;
+
+  $("email-modal-subject").textContent = email.subject || "(sem assunto)";
+
+  const metaParts = [];
+  if (kind === "sent") {
+    metaParts.push(`Para: ${email.to || "—"}`);
+  } else {
+    metaParts.push(`De: ${email.from || "—"}`);
+  }
+  if (email.date) metaParts.push(email.date);
+  $("email-modal-meta").textContent = metaParts.join(" · ");
+
+  const body = email.body_text || email.snippet || "Sem conteúdo disponível.";
+  $("email-modal-body").innerHTML = textToHTML(body);
+
+  const modal = $("email-modal");
+  modal.classList.remove("hidden");
+  modal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+}
+
+function closeEmailModal() {
+  const modal = $("email-modal");
+  modal.classList.add("hidden");
+  modal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
 }
 
 function bitrixAccessFor(taskId) {
@@ -246,19 +316,20 @@ function renderEmails(emails) {
   }
   const unread = emails.filter((e) => e.unread).length;
   $("emails-badge").textContent = unread;
+  cacheEmails("inbox", emails);
 
   list.innerHTML = emails
     .map((e) => {
       const fromName = (e.from || "").replace(/<.*>/, "").trim() || e.from;
       return `
-      <div class="list-item">
+      <button class="list-item list-item-button" type="button" data-email-kind="inbox" data-email-id="${escapeHTML(e.id || "")}">
         <div class="list-dot ${e.unread ? "orange" : "muted"}"></div>
         <div class="list-body">
           <div class="list-title">${escapeHTML(e.subject || "(sem assunto)")}</div>
           <div class="list-sub">${escapeHTML(fromName)} · ${escapeHTML(e.snippet || "")}</div>
         </div>
         <div class="list-meta">${escapeHTML((e.date || "").split(" ").slice(0, 4).join(" "))}</div>
-      </div>
+      </button>
     `;
     })
     .join("");
@@ -270,18 +341,19 @@ function renderEmailsSent(emails) {
     list.innerHTML = empty("Nenhum email enviado recentemente.");
     return;
   }
+  cacheEmails("sent", emails);
   list.innerHTML = emails
     .map((e) => {
       const toName = (e.to || "").replace(/<.*>/, "").trim() || e.to;
       return `
-      <div class="list-item">
+      <button class="list-item list-item-button" type="button" data-email-kind="sent" data-email-id="${escapeHTML(e.id || "")}">
         <div class="list-dot blue"></div>
         <div class="list-body">
           <div class="list-title">${escapeHTML(e.subject || "(sem assunto)")}</div>
           <div class="list-sub">→ ${escapeHTML(toName)} · ${escapeHTML(e.snippet || "")}</div>
         </div>
         <div class="list-meta">${escapeHTML((e.date || "").split(" ").slice(0, 4).join(" "))}</div>
-      </div>
+      </button>
     `;
     })
     .join("");
@@ -437,6 +509,22 @@ function renderBitrix(payload) {
         : access
           ? "Permissões carregadas"
           : "Carregando permissões…";
+      const comments = Array.isArray(task.comments) ? task.comments : [];
+      const commentsHTML = comments.length
+        ? comments
+            .map(
+              (comment) => `
+              <div class="bitrix-comment-bubble">
+                <div class="bitrix-comment-head">
+                  <span class="bitrix-comment-author">${escapeHTML(comment.author_name || "Alguem")}</span>
+                  <span class="bitrix-comment-date">${escapeHTML(fmtDate(comment.created_at))}</span>
+                </div>
+                <div class="bitrix-comment-text">${escapeHTML(comment.message || "")}</div>
+              </div>
+            `
+            )
+            .join("")
+        : '<div class="bitrix-comments-empty">Nenhum comentário encontrado.</div>';
 
       return `
       <div class="list-item bitrix-item${task.done ? " done" : ""}" data-task-id="${escapeHTML(task.id)}">
@@ -491,6 +579,12 @@ function renderBitrix(payload) {
               </button>
             </div>
             <div class="bitrix-feedback" data-task-id="${escapeHTML(task.id)}"></div>
+            <div class="bitrix-comments">
+              <div class="bitrix-comments-title">Comentários</div>
+              <div class="bitrix-comments-list">
+                ${commentsHTML}
+              </div>
+            </div>
           </div>
         </div>
         <div class="list-meta">${escapeHTML(dateLabel)}</div>
@@ -579,29 +673,40 @@ function renderTeam(people) {
 /* ---------- Load + Sync ---------- */
 
 async function loadAll() {
-  const [meta, pending, bitrix, emails, sent, calendar, projects, agents, people] =
-    await Promise.all([
-      loadJSON("meta"),
-      loadJSON("pending"),
-      loadJSON("bitrix_tasks"),
-      loadJSON("emails_inbox"),
-      loadJSON("emails_sent"),
-      loadJSON("calendar"),
-      loadJSON("projects"),
-      loadJSON("agents"),
-      loadJSON("people"),
-    ]);
+  try {
+    const datasets = await loadBootstrap();
+    const meta = datasets.meta || null;
+    const pending = datasets.pending || [];
+    const bitrix = datasets.bitrix_tasks || null;
+    const emails = datasets.emails_inbox || [];
+    const sent = datasets.emails_sent || [];
+    const calendar = datasets.calendar || [];
+    const projects = datasets.projects || [];
+    const agents = datasets.agents || [];
+    const people = datasets.people || [];
 
-  renderMeta(meta);
-  renderPending(pending);
-  renderBitrix(bitrix);
-  hydrateBitrixAccess((bitrix?.items || []).slice(0, 20));
-  renderEmails(emails);
-  renderEmailsSent(sent);
-  renderCalendar(calendar);
-  renderProjects(projects);
-  renderAgents(agents);
-  renderTeam(people);
+    renderMeta(meta);
+    renderPending(pending);
+    renderBitrix(bitrix);
+    hydrateBitrixAccess((bitrix?.items || []).slice(0, 20));
+    renderEmails(emails);
+    renderEmailsSent(sent);
+    renderCalendar(calendar);
+    renderProjects(projects);
+    renderAgents(agents);
+    renderTeam(people);
+  } catch (error) {
+    console.error(error);
+    renderMeta(null);
+    renderPending([]);
+    renderBitrix(null);
+    renderEmails([]);
+    renderEmailsSent([]);
+    renderCalendar([]);
+    renderProjects([]);
+    renderAgents([]);
+    renderTeam([]);
+  }
 }
 
 async function handleBitrixAction(action, taskId, button) {
@@ -709,11 +814,35 @@ function initBitrixActions() {
   });
 }
 
+function initEmailModal() {
+  document.addEventListener("click", (event) => {
+    const trigger = event.target.closest("[data-email-id][data-email-kind]");
+    if (trigger) {
+      openEmailModal(trigger.dataset.emailKind, trigger.dataset.emailId);
+      return;
+    }
+
+    if (
+      event.target.id === "email-modal-close" ||
+      event.target.id === "email-modal-overlay"
+    ) {
+      closeEmailModal();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeEmailModal();
+    }
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   setGreeting();
   setToday();
   initNav();
   initBitrixActions();
+  initEmailModal();
   $("sync-btn").addEventListener("click", runSync);
   loadAll();
 });
