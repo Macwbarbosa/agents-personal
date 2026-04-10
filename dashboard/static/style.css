@@ -390,6 +390,128 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   color: var(--blue);
 }
 
+.bitrix-item {
+  align-items: stretch;
+  padding: 12px 14px;
+}
+
+.bitrix-controls {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.bitrix-form-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.bitrix-form-row:first-child {
+  margin-top: 0;
+}
+
+.bitrix-comment-row {
+  align-items: stretch;
+}
+
+.bitrix-input {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text);
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.bitrix-title-input {
+  flex: 1 1 280px;
+  min-width: 200px;
+}
+
+.bitrix-deadline-input {
+  flex: 0 1 190px;
+}
+
+.bitrix-comment-input {
+  flex: 1 1 300px;
+  min-height: 40px;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.bitrix-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+
+.bitrix-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.bitrix-btn:disabled,
+.bitrix-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bitrix-btn.primary {
+  background: var(--blue-soft);
+  color: var(--blue);
+  border-color: transparent;
+}
+
+.bitrix-btn.success {
+  background: var(--green-soft);
+  color: var(--green);
+  border-color: transparent;
+}
+
+.bitrix-btn.warning {
+  background: var(--orange-soft);
+  color: var(--orange);
+  border-color: transparent;
+}
+
+.bitrix-actions-row {
+  align-items: center;
+}
+
+.bitrix-access-hint {
+  font-size: 11px;
+  color: var(--text-light);
+  margin-top: 2px;
+}
+
+.bitrix-feedback {
+  min-height: 18px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-light);
+}
+
+.bitrix-feedback.ok {
+  color: var(--green);
+}
+
+.bitrix-feedback.err {
+  color: var(--red);
+}
+
+.bitrix-item.is-busy {
+  opacity: 0.75;
+}
+
 .list-item.done .list-title {
   text-decoration: line-through;
   color: var(--text-light);
@@ -511,4 +633,17 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   }
   .nav { flex-direction: row; padding-top: 0; overflow-x: auto; }
   .sidebar-footer { border-top: none; padding-top: 0; border-left: 1px solid var(--border); padding-left: 16px; }
+  .bitrix-form-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .bitrix-actions-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bitrix-deadline-input,
+  .bitrix-title-input,
+  .bitrix-comment-input {
+    width: 100%;
+  }
 }

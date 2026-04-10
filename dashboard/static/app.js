@@ -2,8 +2,15 @@
 
 const DATA_BASE = "/data";
 const API_SYNC = "/api/sync";
+const API_BITRIX_ACCESS = "/api/bitrix/access";
+const API_BITRIX_UPDATE = "/api/bitrix/update";
+const API_BITRIX_COMMENT = "/api/bitrix/comment";
+const API_BITRIX_ACTION = "/api/bitrix/action";
 
 const $ = (id) => document.getElementById(id);
+let bitrixPayloadCache = null;
+const bitrixAccessCache = {};
+const bitrixAccessPending = new Set();
 
 /* ---------- Utilitários ---------- */
 
@@ -68,6 +75,27 @@ async function loadJSON(name) {
   }
 }
 
+async function postJSON(url, payload) {
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+
+  let data = null;
+  try {
+    data = await r.json();
+  } catch {
+    data = { ok: false, error: `Resposta inválida em ${url}` };
+  }
+
+  if (!r.ok || !data.ok) {
+    throw new Error(data?.error || `Falha na chamada ${url}`);
+  }
+
+  return data;
+}
+
 function empty(msg) {
   return `<div class="empty">${msg}</div>`;
 }
@@ -86,6 +114,78 @@ function isPastDate(iso) {
   if (!iso) return false;
   const d = new Date(iso);
   return !isNaN(d) && d.getTime() < Date.now();
+}
+
+function isoToLocalInputValue(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return [
+    d.getFullYear(),
+    pad(d.getMonth() + 1),
+    pad(d.getDate()),
+  ].join("-") + `T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function localInputValueToIso(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (isNaN(d)) return "";
+  return d.toISOString();
+}
+
+function bitrixAccessFor(taskId) {
+  return bitrixAccessCache[String(taskId)] || null;
+}
+
+function bitrixActionAllowed(access, key) {
+  if (!access || access.__error) return false;
+  return Boolean(access[key]);
+}
+
+function setBitrixFeedback(taskId, message, tone = "") {
+  const el = document.querySelector(`.bitrix-feedback[data-task-id="${taskId}"]`);
+  if (!el) return;
+  el.textContent = message || "";
+  el.className = `bitrix-feedback${tone ? ` ${tone}` : ""}`;
+}
+
+function setBitrixBusy(taskId, busy) {
+  const item = document.querySelector(`.bitrix-item[data-task-id="${taskId}"]`);
+  if (!item) return;
+  item.classList.toggle("is-busy", busy);
+  item.querySelectorAll("button, input, textarea").forEach((el) => {
+    el.disabled = busy;
+  });
+}
+
+async function hydrateBitrixAccess(tasks) {
+  if (!Array.isArray(tasks) || tasks.length === 0) return;
+
+  const ids = tasks
+    .map((task) => String(task.id))
+    .filter((id) => id && !bitrixAccessCache[id] && !bitrixAccessPending.has(id));
+
+  if (ids.length === 0) return;
+
+  await Promise.all(
+    ids.map(async (id) => {
+      bitrixAccessPending.add(id);
+      try {
+        const data = await postJSON(API_BITRIX_ACCESS, { task_id: Number(id) });
+        bitrixAccessCache[id] = data.result || {};
+      } catch (error) {
+        bitrixAccessCache[id] = { __error: error.message || "Falha ao carregar permissões" };
+      } finally {
+        bitrixAccessPending.delete(id);
+      }
+    })
+  );
+
+  if (bitrixPayloadCache) {
+    renderBitrix(bitrixPayloadCache);
+  }
 }
 
 /* ---------- Renderizações ---------- */
@@ -255,6 +355,7 @@ function renderProjects(projects) {
 }
 
 function renderBitrix(payload) {
+  bitrixPayloadCache = payload;
   const list = $("bitrix-list");
   const badge = $("bitrix-badge");
 
@@ -284,6 +385,7 @@ function renderBitrix(payload) {
   list.innerHTML = tasks
     .slice(0, 20)
     .map((task) => {
+      const access = bitrixAccessFor(task.id);
       const overdue = !task.done && isPastDate(task.deadline);
       const dotClass = task.done ? "green" : overdue ? "red" : "blue";
       const title = escapeHTML(task.title || `Tarefa #${task.id || "?"}`);
@@ -318,16 +420,78 @@ function renderBitrix(payload) {
           : task.changed_date
             ? `Atualizada ${fmtDate(task.changed_date)}`
             : task.created_date
-              ? `Criada ${fmtDate(task.created_date)}`
+            ? `Criada ${fmtDate(task.created_date)}`
               : "";
 
+      const canEdit = bitrixActionAllowed(access, "edit");
+      const canComment = bitrixActionAllowed(access, "read");
+      const canStart = !task.done && (
+        bitrixActionAllowed(access, "start") ||
+        bitrixActionAllowed(access, "changeStatus")
+      );
+      const canComplete = !task.done && bitrixActionAllowed(access, "complete");
+      const canDefer = !task.done && bitrixActionAllowed(access, "defer");
+      const canRenew = task.done && bitrixActionAllowed(access, "renew");
+      const accessHint = access?.__error
+        ? "Permissões indisponíveis"
+        : access
+          ? "Permissões carregadas"
+          : "Carregando permissões…";
+
       return `
-      <div class="list-item${task.done ? " done" : ""}">
+      <div class="list-item bitrix-item${task.done ? " done" : ""}" data-task-id="${escapeHTML(task.id)}">
         <div class="list-dot ${dotClass}"></div>
         <div class="list-body">
           <div class="list-title">${link}</div>
           <div class="list-sub">${metaPieces.join("")}</div>
           <div class="list-sub">${ownerLine}</div>
+          <div class="bitrix-controls">
+            <div class="bitrix-form-row">
+              <input
+                class="bitrix-input bitrix-title-input"
+                type="text"
+                value="${escapeHTML(task.title || "")}"
+                placeholder="Titulo da tarefa"
+                ${canEdit ? "" : "disabled"}
+              >
+              <input
+                class="bitrix-input bitrix-deadline-input"
+                type="datetime-local"
+                value="${escapeHTML(isoToLocalInputValue(task.deadline))}"
+                ${canEdit ? "" : "disabled"}
+              >
+              <button class="bitrix-btn primary" data-bitrix-action="save" ${canEdit ? "" : "disabled"}>
+                Salvar
+              </button>
+            </div>
+            <div class="bitrix-form-row bitrix-actions-row">
+              <button class="bitrix-btn" data-bitrix-action="start" ${canStart ? "" : "disabled"}>
+                Iniciar
+              </button>
+              <button class="bitrix-btn warning" data-bitrix-action="defer" ${canDefer ? "" : "disabled"}>
+                Adiar
+              </button>
+              <button class="bitrix-btn success" data-bitrix-action="complete" ${canComplete ? "" : "disabled"}>
+                Concluir
+              </button>
+              <button class="bitrix-btn" data-bitrix-action="renew" ${canRenew ? "" : "disabled"}>
+                Reabrir
+              </button>
+            </div>
+            <div class="bitrix-access-hint">${escapeHTML(accessHint)}</div>
+            <div class="bitrix-form-row bitrix-comment-row">
+              <textarea
+                class="bitrix-input bitrix-comment-input"
+                rows="1"
+                placeholder="Adicionar comentário no Bitrix"
+                ${canComment ? "" : "disabled"}
+              ></textarea>
+              <button class="bitrix-btn" data-bitrix-action="comment" ${canComment ? "" : "disabled"}>
+                Comentar
+              </button>
+            </div>
+            <div class="bitrix-feedback" data-task-id="${escapeHTML(task.id)}"></div>
+          </div>
         </div>
         <div class="list-meta">${escapeHTML(dateLabel)}</div>
       </div>
@@ -431,12 +595,63 @@ async function loadAll() {
   renderMeta(meta);
   renderPending(pending);
   renderBitrix(bitrix);
+  hydrateBitrixAccess((bitrix?.items || []).slice(0, 20));
   renderEmails(emails);
   renderEmailsSent(sent);
   renderCalendar(calendar);
   renderProjects(projects);
   renderAgents(agents);
   renderTeam(people);
+}
+
+async function handleBitrixAction(action, taskId, button) {
+  const item = button.closest(".bitrix-item");
+  if (!item) return;
+
+  try {
+    setBitrixBusy(taskId, true);
+    setBitrixFeedback(taskId, "Salvando no Bitrix…");
+
+    if (action === "save") {
+      const title = item.querySelector(".bitrix-title-input")?.value?.trim() || "";
+      const deadlineLocal = item.querySelector(".bitrix-deadline-input")?.value || "";
+      await postJSON(API_BITRIX_UPDATE, {
+        task_id: Number(taskId),
+        title,
+        deadline: localInputValueToIso(deadlineLocal),
+      });
+      delete bitrixAccessCache[String(taskId)];
+      await loadAll();
+      setBitrixFeedback(taskId, "Tarefa atualizada.", "ok");
+      return;
+    }
+
+    if (action === "comment") {
+      const textarea = item.querySelector(".bitrix-comment-input");
+      const text = textarea?.value?.trim() || "";
+      await postJSON(API_BITRIX_COMMENT, {
+        task_id: Number(taskId),
+        text,
+      });
+      if (textarea) textarea.value = "";
+      await loadAll();
+      setBitrixFeedback(taskId, "Comentário enviado.", "ok");
+      return;
+    }
+
+    await postJSON(API_BITRIX_ACTION, {
+      task_id: Number(taskId),
+      action,
+    });
+    delete bitrixAccessCache[String(taskId)];
+    await loadAll();
+    setBitrixFeedback(taskId, "Ação executada no Bitrix.", "ok");
+  } catch (error) {
+    console.error(error);
+    setBitrixFeedback(taskId, error.message || "Falha ao falar com o Bitrix.", "err");
+  } finally {
+    setBitrixBusy(taskId, false);
+  }
 }
 
 async function runSync() {
@@ -482,10 +697,23 @@ function initNav() {
   });
 }
 
+function initBitrixActions() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-bitrix-action]");
+    if (!button) return;
+    const item = button.closest(".bitrix-item");
+    if (!item) return;
+    const taskId = item.dataset.taskId;
+    if (!taskId) return;
+    handleBitrixAction(button.dataset.bitrixAction, taskId, button);
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   setGreeting();
   setToday();
   initNav();
+  initBitrixActions();
   $("sync-btn").addEventListener("click", runSync);
   loadAll();
 });
