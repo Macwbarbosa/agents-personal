@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard | Sr. Bazinga</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">SB</div>
+      <div>
+        <div class="brand-name">Sr. Bazinga</div>
+        <div class="brand-sub">Assistente do Mac</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <a href="#overview" class="nav-item active">Visão geral</a>
+      <a href="#pending" class="nav-item">Pendências</a>
+      <a href="#bitrix" class="nav-item">Bitrix</a>
+      <a href="#emails" class="nav-item">Emails</a>
+      <a href="#calendar" class="nav-item">Agenda</a>
+      <a href="#projects" class="nav-item">Projetos</a>
+      <a href="#agents" class="nav-item">Agentes</a>
+      <a href="#team" class="nav-item">Equipe</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button id="sync-btn" class="sync-btn">
+        <span class="sync-icon">↻</span>
+        <span class="sync-label">Sincronizar</span>
+      </button>
+      <div id="last-sync" class="last-sync">Nunca sincronizado</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="header">
+      <div>
+        <h1 id="greeting">Olá, Mac</h1>
+        <p id="today" class="muted"></p>
+      </div>
+      <div class="header-actions">
+        <div id="sync-status" class="sync-status"></div>
+      </div>
+    </header>
+
+    <!-- VISÃO GERAL: cards de métricas -->
+    <section id="overview" class="section">
+      <div class="metric-grid">
+        <div class="metric-card metric-purple">
+          <div class="metric-icon">✓</div>
+          <div class="metric-body">
+            <div class="metric-label">Pendências</div>
+            <div id="metric-pending" class="metric-value">–</div>
+            <div class="metric-foot">tarefas em aberto</div>
+          </div>
+        </div>
+
+        <div class="metric-card metric-orange">
+          <div class="metric-icon">✉</div>
+          <div class="metric-body">
+            <div class="metric-label">Emails</div>
+            <div id="metric-emails" class="metric-value">–</div>
+            <div class="metric-foot">não lidos na inbox</div>
+          </div>
+        </div>
+
+        <div class="metric-card metric-green">
+          <div class="metric-icon">📅</div>
+          <div class="metric-body">
+            <div class="metric-label">Hoje</div>
+            <div id="metric-events" class="metric-value">–</div>
+            <div class="metric-foot">compromissos agendados</div>
+          </div>
+        </div>
+
+        <div class="metric-card metric-blue">
+          <div class="metric-icon">◆</div>
+          <div class="metric-body">
+            <div class="metric-label">Projetos</div>
+            <div id="metric-projects" class="metric-value">–</div>
+            <div class="metric-foot">ativos na memória</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PENDÊNCIAS -->
+    <section id="pending" class="section">
+      <div class="section-header">
+        <h2>Pendências</h2>
+        <span id="pending-badge" class="badge badge-purple">0</span>
+      </div>
+      <div id="pending-list" class="list"></div>
+    </section>
+
+    <!-- BITRIX -->
+    <section id="bitrix" class="section">
+      <div class="section-header">
+        <h2>Tarefas do Bitrix</h2>
+        <span id="bitrix-badge" class="badge badge-blue">0</span>
+      </div>
+      <div id="bitrix-list" class="list"></div>
+    </section>
+
+    <!-- EMAILS -->
+    <section id="emails" class="section">
+      <div class="section-header">
+        <h2>Caixa de entrada do Bazinga</h2>
+        <span id="emails-badge" class="badge badge-orange">0</span>
+      </div>
+      <div id="emails-list" class="list"></div>
+
+      <div class="section-header" style="margin-top:24px">
+        <h3 class="sub-title">Últimos enviados</h3>
+      </div>
+      <div id="emails-sent-list" class="list"></div>
+    </section>
+
+    <!-- AGENDA -->
+    <section id="calendar" class="section">
+      <div class="section-header">
+        <h2>Próximos compromissos</h2>
+        <span id="calendar-badge" class="badge badge-green">0</span>
+      </div>
+      <div id="calendar-list" class="list"></div>
+    </section>
+
+    <!-- PROJETOS -->
+    <section id="projects" class="section">
+      <div class="section-header">
+        <h2>Projetos ativos</h2>
+        <span id="projects-badge" class="badge badge-blue">0</span>
+      </div>
+      <div id="projects-list" class="card-grid"></div>
+    </section>
+
+    <!-- AGENTES -->
+    <section id="agents" class="section">
+      <div class="section-header">
+        <h2>Agentes</h2>
+        <span id="agents-badge" class="badge badge-purple">0</span>
+      </div>
+      <div id="agents-list" class="card-grid"></div>
+    </section>
+
+    <!-- EQUIPE -->
+    <section id="team" class="section">
+      <div class="section-header">
+        <h2>Equipe Climoo</h2>
+        <span id="team-badge" class="badge badge-blue">0</span>
+      </div>
+      <div id="team-list" class="card-grid"></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

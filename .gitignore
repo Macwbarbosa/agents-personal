@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.py[cod]
+
+dashboard/__pycache__/
+dashboard/data/*.json
+!dashboard/data/.gitkeep
