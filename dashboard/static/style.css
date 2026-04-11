@@ -453,10 +453,6 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   margin-top: 0;
 }
 
-.bitrix-comment-row {
-  align-items: stretch;
-}
-
 .bitrix-input {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -473,13 +469,6 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 
 .bitrix-deadline-input {
   flex: 0 1 190px;
-}
-
-.bitrix-comment-input {
-  flex: 1 1 300px;
-  min-height: 40px;
-  line-height: 1.4;
-  resize: vertical;
 }
 
 .bitrix-btn {
@@ -550,64 +539,6 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 
 .bitrix-item.is-busy {
   opacity: 0.75;
-}
-
-.bitrix-comments {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--border);
-}
-
-.bitrix-comments-title {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-light);
-  margin-bottom: 8px;
-}
-
-.bitrix-comments-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.bitrix-comment-bubble {
-  background: #fafbff;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 8px 10px;
-}
-
-.bitrix-comment-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 4px;
-  font-size: 11px;
-}
-
-.bitrix-comment-author {
-  font-weight: 600;
-  color: var(--text);
-}
-
-.bitrix-comment-date {
-  color: var(--text-light);
-  white-space: nowrap;
-}
-
-.bitrix-comment-text {
-  font-size: 12px;
-  color: var(--text-muted);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.bitrix-comments-empty {
-  font-size: 12px;
-  color: var(--text-light);
 }
 
 .list-item.done .list-title {
@@ -965,8 +896,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .bitrix-deadline-input,
-  .bitrix-title-input,
-  .bitrix-comment-input {
+  .bitrix-title-input {
     width: 100%;
   }
 }

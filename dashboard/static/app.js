@@ -5,7 +5,6 @@ const API_BOOTSTRAP = "/api/bootstrap";
 const API_SYNC = "/api/sync";
 const API_BITRIX_ACCESS = "/api/bitrix/access";
 const API_BITRIX_UPDATE = "/api/bitrix/update";
-const API_BITRIX_COMMENT = "/api/bitrix/comment";
 const API_BITRIX_ACTION = "/api/bitrix/action";
 const API_EMAIL_REPLY = "/api/email/reply";
 const API_EMAIL_SEND = "/api/email/send";
@@ -688,8 +687,6 @@ function renderBitrix(payload) {
             ? `Criada ${fmtDate(task.created_date)}`
               : "";
 
-      const canEdit = bitrixActionAllowed(access, "edit");
-      const canComment = bitrixActionAllowed(access, "read");
       const canStart = !task.done && (
         bitrixActionAllowed(access, "start") ||
         bitrixActionAllowed(access, "changeStatus")
@@ -702,22 +699,6 @@ function renderBitrix(payload) {
         : access
           ? "Permissões carregadas"
           : "Carregando permissões…";
-      const comments = Array.isArray(task.comments) ? task.comments : [];
-      const commentsHTML = comments.length
-        ? comments
-            .map(
-              (comment) => `
-              <div class="bitrix-comment-bubble">
-                <div class="bitrix-comment-head">
-                  <span class="bitrix-comment-author">${escapeHTML(comment.author_name || "Alguem")}</span>
-                  <span class="bitrix-comment-date">${escapeHTML(fmtDate(comment.created_at))}</span>
-                </div>
-                <div class="bitrix-comment-text">${escapeHTML(comment.message || "")}</div>
-              </div>
-            `
-            )
-            .join("")
-        : '<div class="bitrix-comments-empty">Nenhum comentário encontrado.</div>';
 
       return `
       <div class="list-item bitrix-item${task.done ? " done" : ""}" data-task-id="${escapeHTML(task.id)}">
@@ -727,24 +708,6 @@ function renderBitrix(payload) {
           <div class="list-sub">${metaPieces.join("")}</div>
           <div class="list-sub">${ownerLine}</div>
           <div class="bitrix-controls">
-            <div class="bitrix-form-row">
-              <input
-                class="bitrix-input bitrix-title-input"
-                type="text"
-                value="${escapeHTML(task.title || "")}"
-                placeholder="Titulo da tarefa"
-                ${canEdit ? "" : "disabled"}
-              >
-              <input
-                class="bitrix-input bitrix-deadline-input"
-                type="datetime-local"
-                value="${escapeHTML(isoToLocalInputValue(task.deadline))}"
-                ${canEdit ? "" : "disabled"}
-              >
-              <button class="bitrix-btn primary" data-bitrix-action="save" ${canEdit ? "" : "disabled"}>
-                Salvar
-              </button>
-            </div>
             <div class="bitrix-form-row bitrix-actions-row">
               <button class="bitrix-btn" data-bitrix-action="start" ${canStart ? "" : "disabled"}>
                 Iniciar
@@ -760,24 +723,7 @@ function renderBitrix(payload) {
               </button>
             </div>
             <div class="bitrix-access-hint">${escapeHTML(accessHint)}</div>
-            <div class="bitrix-form-row bitrix-comment-row">
-              <textarea
-                class="bitrix-input bitrix-comment-input"
-                rows="1"
-                placeholder="Adicionar comentário no Bitrix"
-                ${canComment ? "" : "disabled"}
-              ></textarea>
-              <button class="bitrix-btn" data-bitrix-action="comment" ${canComment ? "" : "disabled"}>
-                Comentar
-              </button>
-            </div>
             <div class="bitrix-feedback" data-task-id="${escapeHTML(task.id)}"></div>
-            <div class="bitrix-comments">
-              <div class="bitrix-comments-title">Comentários</div>
-              <div class="bitrix-comments-list">
-                ${commentsHTML}
-              </div>
-            </div>
           </div>
         </div>
         <div class="list-meta">${escapeHTML(dateLabel)}</div>
@@ -921,19 +867,6 @@ async function handleBitrixAction(action, taskId, button) {
       delete bitrixAccessCache[String(taskId)];
       await loadAll();
       setBitrixFeedback(taskId, "Tarefa atualizada.", "ok");
-      return;
-    }
-
-    if (action === "comment") {
-      const textarea = item.querySelector(".bitrix-comment-input");
-      const text = textarea?.value?.trim() || "";
-      await postJSON(API_BITRIX_COMMENT, {
-        task_id: Number(taskId),
-        text,
-      });
-      if (textarea) textarea.value = "";
-      await loadAll();
-      setBitrixFeedback(taskId, "Comentário enviado.", "ok");
       return;
     }
 

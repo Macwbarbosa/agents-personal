@@ -44,7 +44,6 @@ BITRIX_TASKS_WEBHOOK_URL = os.getenv("BITRIX_TASKS_WEBHOOK_URL", "")
 BITRIX_WEBHOOK_BASE_URL = os.getenv("BITRIX_WEBHOOK_BASE_URL", "")
 BITRIX_PAGE_SIZE = 50
 BITRIX_MAX_PAGES = 20
-BITRIX_COMMENTS_PER_TASK = 5
 
 BITRIX_STATUS_LABELS = {
     "2": "A fazer",
@@ -457,43 +456,6 @@ def build_bitrix_task_url(portal_base: str, task_id: str, responsible_id: str) -
     return f"{portal_base}/company/personal/user/{responsible_id}/tasks/task/view/{task_id}/"
 
 
-def fetch_bitrix_comments(task_id: str) -> list[dict]:
-    """Busca comentarios legados da tarefa no Bitrix."""
-    base_url = (BITRIX_WEBHOOK_BASE_URL or "").strip()
-    if not base_url:
-        return []
-
-    comments_url = build_bitrix_method_url(base_url, "task.commentitem.getlist")
-    if not comments_url:
-        return []
-
-    try:
-        query = urlencode(
-            {
-                "TASKID": task_id,
-                "ORDER[POST_DATE]": "desc",
-            }
-        )
-        payload = fetch_remote_json(f"{comments_url}?{query}")
-        items = payload.get("result") if isinstance(payload.get("result"), list) else []
-        comments = []
-        for item in items[:BITRIX_COMMENTS_PER_TASK]:
-            comments.append(
-                {
-                    "id": str(item.get("ID") or ""),
-                    "author_id": str(item.get("AUTHOR_ID") or ""),
-                    "author_name": item.get("AUTHOR_NAME") or "Alguem",
-                    "author_email": item.get("AUTHOR_EMAIL") or "",
-                    "message": item.get("POST_MESSAGE") or "",
-                    "created_at": item.get("POST_DATE") or "",
-                }
-            )
-        return comments
-    except Exception as e:
-        print(f"[aviso] comentarios Bitrix task {task_id}: {e}")
-        return []
-
-
 def normalize_bitrix_task(task: dict, portal_base: str) -> dict:
     task_id = str(task.get("id") or "").strip()
     status = str(task.get("status") or "").strip()
@@ -503,8 +465,6 @@ def normalize_bitrix_task(task: dict, portal_base: str) -> dict:
     responsible_id = str(
         task.get("responsibleId") or responsible.get("id") or ""
     ).strip()
-
-    comments = fetch_bitrix_comments(task_id)
 
     return {
         "id": task_id,
@@ -520,8 +480,6 @@ def normalize_bitrix_task(task: dict, portal_base: str) -> dict:
         "creator_name": creator.get("name") or "",
         "responsible_name": responsible.get("name") or "",
         "url": build_bitrix_task_url(portal_base, task_id, responsible_id),
-        "comments": comments,
-        "comments_count": len(comments),
     }
 
 
