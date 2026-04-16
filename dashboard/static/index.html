@@ -47,44 +47,130 @@
       </div>
     </header>
 
-    <!-- VISÃO GERAL: cards de métricas -->
+    <!-- VISÃO GERAL v2: cockpit diário/semanal -->
     <section id="overview" class="section">
+      <!-- Toggle Hoje / Semana -->
+      <div class="ov-toggle-bar">
+        <div class="ov-toggle">
+          <button class="ov-toggle-btn active" data-ov-view="hoje">Hoje</button>
+          <button class="ov-toggle-btn" data-ov-view="semana">Semana</button>
+        </div>
+        <div id="daily-pulse" class="daily-pulse"></div>
+      </div>
+
+      <!-- Métricas compactas -->
       <div class="metric-grid">
         <div class="metric-card metric-purple">
           <div class="metric-icon">✓</div>
           <div class="metric-body">
             <div class="metric-label">Pendências</div>
-            <div id="metric-pending" class="metric-value">–</div>
+            <div id="metric-pending" class="metric-value">--</div>
             <div class="metric-foot">tarefas em aberto</div>
           </div>
         </div>
-
         <div class="metric-card metric-orange">
           <div class="metric-icon">✉</div>
           <div class="metric-body">
             <div class="metric-label">Emails</div>
-            <div id="metric-emails" class="metric-value">–</div>
-            <div class="metric-foot">não lidos na inbox</div>
+            <div id="metric-emails" class="metric-value">--</div>
+            <div class="metric-foot">não lidos</div>
           </div>
         </div>
-
         <div class="metric-card metric-green">
           <div class="metric-icon">📅</div>
           <div class="metric-body">
-            <div class="metric-label">Hoje</div>
-            <div id="metric-events" class="metric-value">–</div>
-            <div class="metric-foot">compromissos agendados</div>
+            <div class="metric-label">Agenda</div>
+            <div id="metric-events" class="metric-value">--</div>
+            <div class="metric-foot">compromissos hoje</div>
           </div>
         </div>
-
         <div class="metric-card metric-blue">
           <div class="metric-icon">◆</div>
           <div class="metric-body">
             <div class="metric-label">Projetos</div>
-            <div id="metric-projects" class="metric-value">–</div>
-            <div class="metric-foot">ativos na memória</div>
+            <div id="metric-projects" class="metric-value">--</div>
+            <div class="metric-foot">ativos</div>
           </div>
         </div>
+      </div>
+
+      <!-- ====== VIEW: HOJE ====== -->
+      <div id="view-hoje" class="ov-view">
+        <div class="ov-layout">
+          <!-- COLUNA PRINCIPAL (esquerda) -->
+          <div class="ov-col-main">
+            <!-- Foco do Dia -->
+            <div class="ov-block">
+              <div class="ov-block-header">
+                <h3 class="ov-block-title">Foco do Dia</h3>
+                <button id="focus-suggest-btn" class="ov-action-btn" type="button">Sugerir de novo</button>
+              </div>
+              <div id="focus-list" class="ov-focus-list"></div>
+              <div class="ov-focus-add">
+                <input id="focus-add-input" class="ov-focus-input" type="text" placeholder="Adicionar foco manual...">
+                <button id="focus-add-btn" class="ov-focus-add-btn" type="button">+</button>
+              </div>
+            </div>
+
+            <!-- Tarefas do Dia -->
+            <div class="ov-block">
+              <div class="ov-block-header">
+                <h3 class="ov-block-title">Tarefas do Dia</h3>
+                <button id="tarefas-expand-btn" class="ov-action-btn hidden" type="button">Ver todas atrasadas</button>
+              </div>
+              <div id="tarefas-dia-list" class="list"></div>
+            </div>
+
+            <!-- Caixa de Ação -->
+            <div class="ov-block">
+              <div class="ov-block-header">
+                <h3 class="ov-block-title">Caixa de Ação</h3>
+                <span id="caixa-acao-count" class="ov-block-count"></span>
+              </div>
+              <div id="caixa-acao-list" class="list"></div>
+            </div>
+          </div>
+
+          <!-- COLUNA LATERAL (direita) -->
+          <div class="ov-col-side">
+            <!-- Agenda de Hoje -->
+            <div class="ov-block">
+              <div class="ov-block-header">
+                <h3 class="ov-block-title">Agenda de Hoje</h3>
+              </div>
+              <div id="agenda-hoje-list" class="ov-agenda-list"></div>
+            </div>
+
+            <!-- Revisões agendadas -->
+            <div class="ov-block ov-block-compact">
+              <h3 class="ov-block-title">Revisões agendadas</h3>
+              <div id="revisoes-list" class="ov-mini-list"></div>
+            </div>
+
+            <!-- Projetos parados -->
+            <div class="ov-block ov-block-compact">
+              <h3 class="ov-block-title">Projetos parados</h3>
+              <div id="projetos-parados-list" class="ov-mini-list"></div>
+            </div>
+
+            <!-- Pessoas que aguardam resposta -->
+            <div class="ov-block ov-block-compact">
+              <h3 class="ov-block-title">Aguardando minha resposta</h3>
+              <div id="aguardando-list" class="ov-mini-list"></div>
+            </div>
+
+            <!-- Decisões do dia -->
+            <div class="ov-block ov-block-compact">
+              <h3 class="ov-block-title">Decisões do dia</h3>
+              <div id="decisoes-list" class="ov-mini-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== VIEW: SEMANA ====== -->
+      <div id="view-semana" class="ov-view hidden">
+        <div id="semana-grid" class="ov-semana-grid"></div>
       </div>
     </section>
 
@@ -191,6 +277,7 @@
         <div class="email-reply-actions">
           <div id="email-reply-feedback" class="email-reply-feedback"></div>
           <div class="email-reply-buttons">
+            <button id="email-suggest-btn" class="modal-send-btn suggest" type="button">Sugerir resposta</button>
             <button id="email-reply-send" class="modal-send-btn secondary" type="button">Responder</button>
             <button id="email-reply-all-send" class="modal-send-btn" type="button">Responder a todos</button>
           </div>

@@ -65,6 +65,8 @@ DATASET_NAMES = (
     "emails_sent",
     "calendar",
     "bitrix_tasks",
+    "outlook_inbox",
+    "m365_calendar",
 )
 
 
@@ -572,12 +574,32 @@ def collect_dashboard_snapshot() -> dict:
     events = fetch_calendar(calendar) if calendar else []
     bitrix_tasks = fetch_bitrix_tasks()
 
+    # Microsoft 365 (Outlook + Calendar corporativo) via Graph
+    try:
+        try:
+            from . import m365 as m365_mod
+        except ImportError:
+            import m365 as m365_mod
+        outlook_inbox = m365_mod.fetch_outlook_inbox(top=20)
+        m365_calendar = m365_mod.fetch_calendar_events(days_ahead=7)
+    except Exception as e:
+        print(f"[aviso] m365 indisponivel: {e}")
+        outlook_inbox = []
+        m365_calendar = []
+
     unread_count = sum(1 for e in emails_inbox if e["unread"])
     pending_count = sum(1 for t in pending if not t["done"])
     today = datetime.now().date()
     events_today = sum(
         1 for e in events
         if e["start"] and e["start"][:10] == today.isoformat()
+    )
+
+    outlook_unread = sum(1 for m in outlook_inbox if m.get("unread"))
+    today_iso = today.isoformat()
+    m365_events_today = sum(
+        1 for e in m365_calendar
+        if e.get("start") and e["start"][:10] == today_iso
     )
 
     meta = {
@@ -589,13 +611,20 @@ def collect_dashboard_snapshot() -> dict:
             "active_projects": len(projects),
             "active_agents": len(agents),
             "bitrix_open_tasks": bitrix_tasks["open_count"],
+            "outlook_unread": outlook_unread,
+            "m365_events_today": m365_events_today,
         },
         "integrations": {
             "bitrix": {
                 "configured": bitrix_tasks["configured"],
                 "error": bitrix_tasks["error"],
                 "total": bitrix_tasks["total"],
-            }
+            },
+            "m365": {
+                "configured": bool(outlook_inbox) or bool(m365_calendar),
+                "outlook_count": len(outlook_inbox),
+                "calendar_count": len(m365_calendar),
+            },
         },
     }
 
@@ -609,6 +638,8 @@ def collect_dashboard_snapshot() -> dict:
         "emails_sent": emails_sent,
         "calendar": events,
         "bitrix_tasks": bitrix_tasks,
+        "outlook_inbox": outlook_inbox,
+        "m365_calendar": m365_calendar,
     }
 
 
@@ -652,6 +683,9 @@ def main():
         )
     else:
         print("  bitrix: webhook nao configurado")
+    outlook_inbox = snapshot["outlook_inbox"]
+    m365_calendar = snapshot["m365_calendar"]
+    print(f"  m365: {len(outlook_inbox)} emails, {len(m365_calendar)} eventos")
 
     write_snapshot(snapshot)
 

@@ -21,13 +21,16 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 import webbrowser
 import base64
+from datetime import datetime
 
 try:
     from .env_loader import load_dotenv
     from .sync import collect_dashboard_snapshot, get_dataset_payload, get_google_services
+    from . import focus as focus_mod
 except ImportError:
     from env_loader import load_dotenv
     from sync import collect_dashboard_snapshot, get_dataset_payload, get_google_services
+    import focus as focus_mod
 
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT.parent / ".env")
@@ -367,6 +370,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route_path == "/api/meta":
             self._serve_dataset("meta")
             return
+        if route_path == "/api/focus":
+            self._focus_get(parsed)
+            return
+        if route_path == "/api/focus/history":
+            json_response(self, 200, {"ok": True, "history": focus_mod.list_focus_history()})
+            return
         if route_path == "/favicon.ico":
             self.send_response(204)
             self.end_headers()
@@ -397,6 +406,30 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
         if route_path == "/api/email/send":
             self._email_send()
+            return
+        if route_path == "/api/focus":
+            self._focus_post()
+            return
+        if route_path == "/api/outlook/message":
+            self._outlook_message()
+            return
+        if route_path == "/api/outlook/reply":
+            self._outlook_reply()
+            return
+        if route_path == "/api/email/suggest-reply":
+            self._email_suggest_reply()
+            return
+        if route_path == "/api/focus/suggest":
+            self._focus_suggest()
+            return
+        if route_path == "/api/focus/toggle":
+            self._focus_toggle()
+            return
+        if route_path == "/api/focus/remove":
+            self._focus_remove()
+            return
+        if route_path == "/api/focus/migrate":
+            self._focus_migrate()
             return
         self.send_error(404)
 
@@ -602,6 +635,187 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "last_sync": snapshot.get("meta", {}).get("last_sync"),
                 },
             )
+        except Exception as e:
+            json_response(self, 500, {"ok": False, "error": str(e)})
+
+    def _outlook_message(self):
+        try:
+            payload = parse_json_body(self)
+            message_id = (payload.get("id") or "").strip()
+            if not message_id:
+                raise RuntimeError("id da mensagem não informado")
+            try:
+                from . import m365 as m365_mod
+            except ImportError:
+                import m365 as m365_mod
+            token = m365_mod.get_access_token()
+            if not token:
+                raise RuntimeError("Token M365 indisponível")
+            data = m365_mod._graph_get(
+                f"/me/messages/{message_id}",
+                token,
+                {"$select": "id,subject,from,toRecipients,ccRecipients,receivedDateTime,body,bodyPreview,isRead,flag,conversationId,replyTo"},
+            )
+            sender = (data.get("from") or {}).get("emailAddress") or {}
+            to_list = [(r.get("emailAddress") or {}).get("address", "") for r in (data.get("toRecipients") or [])]
+            cc_list = [(r.get("emailAddress") or {}).get("address", "") for r in (data.get("ccRecipients") or [])]
+            reply_to_list = [(r.get("emailAddress") or {}).get("address", "") for r in (data.get("replyTo") or [])]
+            body_obj = data.get("body") or {}
+            body_text = body_obj.get("content") or data.get("bodyPreview") or ""
+            body_type = body_obj.get("contentType") or "text"
+            json_response(self, 200, {
+                "ok": True,
+                "message": {
+                    "id": data.get("id"),
+                    "subject": data.get("subject") or "(sem assunto)",
+                    "from": f"{sender.get('name', '')} <{sender.get('address', '')}>",
+                    "from_name": sender.get("name") or "",
+                    "from_email": sender.get("address") or "",
+                    "to": ", ".join(to_list),
+                    "cc": ", ".join(cc_list),
+                    "reply_to": ", ".join(reply_to_list) if reply_to_list else sender.get("address", ""),
+                    "date": data.get("receivedDateTime") or "",
+                    "body_text": body_text,
+                    "body_type": body_type,
+                    "conversation_id": data.get("conversationId") or "",
+                    "unread": not data.get("isRead", False),
+                    "source": "outlook",
+                },
+            })
+        except Exception as e:
+            json_response(self, 500, {"ok": False, "error": str(e)})
+
+    def _outlook_reply(self):
+        try:
+            payload = parse_json_body(self)
+            message_id = (payload.get("id") or "").strip()
+            reply_text = (payload.get("reply_text") or "").strip()
+            if not message_id:
+                raise RuntimeError("id da mensagem não informado")
+            if not reply_text:
+                raise RuntimeError("Resposta vazia")
+
+            try:
+                from . import m365 as m365_mod
+            except ImportError:
+                import m365 as m365_mod
+
+            token = m365_mod.get_access_token()
+            if not token:
+                raise RuntimeError("Token M365 indisponível")
+
+            # Graph API: POST /me/messages/{id}/reply
+            import subprocess as sp
+            url = f"{m365_mod.GRAPH_BASE}/me/messages/{message_id}/reply"
+            body = json.dumps({"comment": reply_text}, ensure_ascii=False)
+            result = sp.run(
+                [
+                    "curl", "-g", "--silent", "--show-error", "--location",
+                    "-H", f"Authorization: Bearer {token}",
+                    "-H", "Content-Type: application/json",
+                    "-X", "POST", "-d", body, url,
+                ],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(result.stderr.strip() or f"curl rc={result.returncode}")
+            # Graph reply returns 202 Accepted with no body on success
+            if result.stdout.strip():
+                resp_data = json.loads(result.stdout)
+                if isinstance(resp_data, dict) and "error" in resp_data:
+                    raise RuntimeError(resp_data["error"].get("message", "Graph error"))
+
+            json_response(self, 200, {"ok": True, "message": "Resposta enviada pelo Outlook"})
+        except Exception as e:
+            json_response(self, 500, {"ok": False, "error": str(e)})
+
+    def _email_suggest_reply(self):
+        try:
+            payload = parse_json_body(self)
+            subject = (payload.get("subject") or "").strip()
+            sender = (payload.get("sender") or "").strip()
+            body = (payload.get("body") or "").strip()
+            if not body and not subject:
+                raise RuntimeError("Sem conteúdo para sugerir resposta")
+
+            try:
+                from . import reply_suggest
+            except ImportError:
+                import reply_suggest
+
+            suggestion = reply_suggest.suggest_reply(
+                subject=subject,
+                sender=sender,
+                body=body,
+            )
+            json_response(self, 200, {"ok": True, "suggestion": suggestion})
+        except Exception as e:
+            json_response(self, 500, {"ok": False, "error": str(e)})
+
+    def _focus_get(self, parsed):
+        try:
+            params = dict(urllib.parse.parse_qsl(parsed.query))
+            day = params.get("date")
+            entry = focus_mod.load_focus(day)
+            json_response(self, 200, {"ok": True, "focus": entry})
+        except Exception as e:
+            json_response(self, 500, {"ok": False, "error": str(e)})
+
+    def _focus_post(self):
+        try:
+            payload = parse_json_body(self)
+            day = payload.get("date") or datetime.now().date().isoformat()
+            text = payload.get("text") or ""
+            source = payload.get("source") or "manual"
+            item = focus_mod.add_focus(day, text, source=source)
+            json_response(self, 200, {"ok": True, "item": item, "focus": focus_mod.load_focus(day)})
+        except Exception as e:
+            json_response(self, 500, {"ok": False, "error": str(e)})
+
+    def _focus_toggle(self):
+        try:
+            payload = parse_json_body(self)
+            day = payload.get("date") or datetime.now().date().isoformat()
+            focus_id = payload.get("id")
+            if not focus_id:
+                raise RuntimeError("id do foco não informado")
+            updated = focus_mod.toggle_focus(day, focus_id)
+            if updated is None:
+                raise RuntimeError("foco não encontrado")
+            json_response(self, 200, {"ok": True, "item": updated, "focus": focus_mod.load_focus(day)})
+        except Exception as e:
+            json_response(self, 500, {"ok": False, "error": str(e)})
+
+    def _focus_remove(self):
+        try:
+            payload = parse_json_body(self)
+            day = payload.get("date") or datetime.now().date().isoformat()
+            focus_id = payload.get("id")
+            if not focus_id:
+                raise RuntimeError("id do foco não informado")
+            removed = focus_mod.remove_focus(day, focus_id)
+            if not removed:
+                raise RuntimeError("foco não encontrado")
+            json_response(self, 200, {"ok": True, "focus": focus_mod.load_focus(day)})
+        except Exception as e:
+            json_response(self, 500, {"ok": False, "error": str(e)})
+
+    def _focus_migrate(self):
+        try:
+            payload = parse_json_body(self)
+            day = payload.get("date") or datetime.now().date().isoformat()
+            items = focus_mod.migrate_unresolved(day)
+            json_response(self, 200, {"ok": True, "items": items, "focus": focus_mod.load_focus(day)})
+        except Exception as e:
+            json_response(self, 500, {"ok": False, "error": str(e)})
+
+    def _focus_suggest(self):
+        try:
+            payload = parse_json_body(self)
+            day = payload.get("date") or datetime.now().date().isoformat()
+            snapshot = load_snapshot()
+            result = focus_mod.suggest_focus(day, snapshot)
+            json_response(self, 200, {"ok": True, "focus": result})
         except Exception as e:
             json_response(self, 500, {"ok": False, "error": str(e)})
 

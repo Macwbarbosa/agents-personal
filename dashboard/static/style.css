@@ -720,6 +720,12 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   border: 1px solid var(--border);
 }
 
+.modal-send-btn.suggest {
+  background: var(--orange-soft);
+  color: var(--orange);
+  border: 1px solid transparent;
+}
+
 .modal-send-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -898,5 +904,542 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   .bitrix-deadline-input,
   .bitrix-title-input {
     width: 100%;
+  }
+}
+
+/* ========= VISÃO GERAL v2 ========= */
+
+.ov-toggle-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.ov-toggle {
+  display: inline-flex;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.ov-toggle-btn {
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ov-toggle-btn.active {
+  background: var(--purple);
+  color: #fff;
+}
+
+.ov-toggle-btn:not(.active):hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.daily-pulse {
+  font-size: 13px;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+/* Layout 2 colunas */
+.ov-view {
+  margin-top: 16px;
+}
+
+.ov-layout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 16px;
+  align-items: start;
+}
+
+.ov-col-main, .ov-col-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ov-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.ov-block-compact {
+  padding: 14px;
+}
+
+.ov-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.ov-block-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.ov-block-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.ov-action-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--purple);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ov-action-btn:hover {
+  background: var(--purple-soft);
+}
+
+.ov-action-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* Focus items */
+.ov-focus-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ov-focus-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--bg);
+  transition: background 0.15s;
+}
+
+.ov-focus-item:hover {
+  background: var(--purple-soft);
+}
+
+.ov-focus-item.done {
+  opacity: 0.55;
+}
+
+.ov-focus-item.done .ov-focus-text {
+  text-decoration: line-through;
+}
+
+.ov-focus-check {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: var(--purple);
+}
+
+.ov-focus-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.ov-focus-meta {
+  font-size: 11px;
+  color: var(--text-light);
+  white-space: nowrap;
+}
+
+.ov-focus-age {
+  font-size: 10px;
+  color: var(--orange);
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.ov-focus-remove {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-light);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.ov-focus-item:hover .ov-focus-remove {
+  opacity: 1;
+}
+
+.ov-focus-remove:hover {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.ov-focus-add {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ov-focus-input {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.ov-focus-input:focus {
+  outline: none;
+  border-color: var(--purple);
+  background: var(--surface);
+}
+
+.ov-focus-add-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--purple);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.ov-focus-add-btn:hover {
+  transform: scale(1.05);
+}
+
+/* Agenda Hoje */
+.ov-agenda-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ov-agenda-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg);
+  transition: background 0.15s;
+}
+
+.ov-agenda-item:hover {
+  background: var(--green-soft);
+}
+
+.ov-agenda-time {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--purple);
+  min-width: 48px;
+  text-align: center;
+}
+
+.ov-agenda-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ov-agenda-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ov-agenda-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.ov-agenda-badge-online {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  white-space: nowrap;
+}
+
+.ov-agenda-join {
+  font-size: 11px;
+  color: var(--blue);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.ov-agenda-join:hover {
+  text-decoration: underline;
+}
+
+/* Mini-list (4 blocos extras) */
+.ov-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ov-mini-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.ov-mini-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ov-mini-dot.orange { background: var(--orange); }
+.ov-mini-dot.green { background: var(--green); }
+.ov-mini-dot.blue { background: var(--blue); }
+.ov-mini-dot.purple { background: var(--purple); }
+.ov-mini-dot.red { background: var(--red); }
+
+.ov-mini-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ov-mini-meta {
+  font-size: 10px;
+  color: var(--text-light);
+  white-space: nowrap;
+}
+
+.ov-mini-clickable {
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.ov-mini-clickable:hover {
+  background: var(--purple-soft);
+}
+
+.ov-mini-active {
+  background: var(--purple-soft);
+  box-shadow: inset 3px 0 0 var(--purple);
+}
+
+.ov-mini-detail {
+  padding: 10px 12px 10px 22px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface);
+  border-left: 3px solid var(--border);
+  border-radius: 0 6px 6px 0;
+  margin-bottom: 4px;
+  animation: miniSlide 0.15s ease-out;
+}
+
+@keyframes miniSlide {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.ov-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ov-detail-row strong {
+  color: var(--text);
+  font-weight: 600;
+  min-width: 70px;
+}
+
+.ov-detail-snippet {
+  margin-top: 6px;
+  padding: 8px;
+  background: var(--bg);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.ov-detail-link {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--purple);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.ov-detail-link:hover {
+  text-decoration: underline;
+}
+
+.ov-mini-empty {
+  font-size: 12px;
+  color: var(--text-light);
+  padding: 8px 0;
+}
+
+/* Grid 2 colunas (legado, não mais usado na view Hoje) */
+.ov-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+/* Semana view */
+.ov-semana-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.ov-semana-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  cursor: pointer;
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+
+.ov-semana-card:hover {
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
+}
+
+.ov-semana-card.today {
+  border-color: var(--purple);
+  box-shadow: 0 0 0 2px var(--purple-soft);
+}
+
+.ov-semana-card.expanded {
+  grid-column: 1 / -1;
+}
+
+.ov-semana-day {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ov-semana-date {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 4px 0 8px;
+}
+
+.ov-semana-today-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--purple);
+  text-transform: uppercase;
+}
+
+.ov-semana-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.ov-semana-detail {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ov-semana-detail-item {
+  font-size: 12px;
+  color: var(--text);
+  padding: 4px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 1100px) {
+  .ov-layout {
+    grid-template-columns: 1fr;
+  }
+  .ov-col-side {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .ov-col-side {
+    grid-template-columns: 1fr;
+  }
+  .ov-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .ov-semana-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   }
 }
