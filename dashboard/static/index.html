@@ -17,19 +17,23 @@
     </div>
 
     <nav class="nav">
-      <a href="#overview" class="nav-item active">Visão geral</a>
-      <a href="#pending" class="nav-item">Pendências</a>
-      <a href="#bitrix" class="nav-item">Bitrix</a>
-      <a href="#emails" class="nav-item">Emails</a>
-      <a href="#calendar" class="nav-item">Agenda</a>
-      <a href="#projects" class="nav-item">Projetos</a>
-      <a href="#agents" class="nav-item">Agentes</a>
-      <a href="#team" class="nav-item">Equipe</a>
+      <a href="#cockpit" class="nav-item active" data-section="cockpit">Cockpit</a>
+      <a href="#semana" class="nav-item" data-section="semana">Semana</a>
+      <div class="nav-divider"></div>
+      <a href="#respostas" class="nav-item" data-section="respostas">Respostas</a>
+      <a href="#execucao" class="nav-item" data-section="execucao">Execucao</a>
+      <a href="#aguardando" class="nav-item" data-section="aguardando">Aguardando</a>
+      <div class="nav-divider"></div>
+      <div class="nav-group-label">Fontes</div>
+      <a href="#bitrix" class="nav-item nav-item-sm" data-section="bitrix">Bitrix</a>
+      <a href="#emails" class="nav-item nav-item-sm" data-section="emails">Email</a>
+      <a href="#calendar" class="nav-item nav-item-sm" data-section="calendar">Agenda</a>
+      <a href="#projects" class="nav-item nav-item-sm" data-section="projects">Projetos</a>
     </nav>
 
     <div class="sidebar-footer">
       <button id="sync-btn" class="sync-btn">
-        <span class="sync-icon">↻</span>
+        <span class="sync-icon">&#8635;</span>
         <span class="sync-label">Sincronizar</span>
       </button>
       <div id="last-sync" class="last-sync">Nunca sincronizado</div>
@@ -37,154 +41,125 @@
   </aside>
 
   <main class="main">
-    <header class="header">
-      <div>
-        <h1 id="greeting">Olá, Mac</h1>
-        <p id="today" class="muted"></p>
-      </div>
-      <div class="header-actions">
-        <div id="sync-status" class="sync-status"></div>
-      </div>
-    </header>
-
-    <!-- VISÃO GERAL v2: cockpit diário/semanal -->
-    <section id="overview" class="section">
-      <!-- Toggle Hoje / Semana -->
-      <div class="ov-toggle-bar">
-        <div class="ov-toggle">
-          <button class="ov-toggle-btn active" data-ov-view="hoje">Hoje</button>
-          <button class="ov-toggle-btn" data-ov-view="semana">Semana</button>
+    <!-- ====== COCKPIT (home) ====== -->
+    <section id="cockpit" class="section">
+      <header class="header">
+        <div>
+          <h1 id="greeting">Ola, Mac</h1>
+          <p id="today" class="muted"></p>
         </div>
-        <div id="daily-pulse" class="daily-pulse"></div>
+        <div class="header-actions">
+          <div id="sync-status" class="sync-status"></div>
+        </div>
+      </header>
+
+      <!-- BRIEFING INTELIGENTE -->
+      <div id="briefing" class="briefing-card">
+        <div id="briefing-summary" class="briefing-summary">Carregando...</div>
+        <div id="briefing-narrative" class="briefing-narrative"></div>
+        <div id="briefing-counters" class="briefing-counters"></div>
       </div>
 
-      <!-- Métricas compactas -->
-      <div class="metric-grid">
-        <div class="metric-card metric-purple">
-          <div class="metric-icon">✓</div>
-          <div class="metric-body">
-            <div class="metric-label">Pendências</div>
-            <div id="metric-pending" class="metric-value">--</div>
-            <div class="metric-foot">tarefas em aberto</div>
+      <!-- LAYOUT 2 COLUNAS -->
+      <div class="cockpit-layout">
+        <!-- COLUNA PRINCIPAL -->
+        <div class="cockpit-main">
+          <!-- PRIORIDADES DE HOJE -->
+          <div class="block">
+            <div class="block-header">
+              <h2 class="block-title">Prioridades de hoje</h2>
+              <span id="priorities-count" class="block-count"></span>
+            </div>
+            <div id="priorities-list" class="priorities-list"></div>
+          </div>
+
+          <!-- FOCO DO DIA -->
+          <div class="block">
+            <div class="block-header">
+              <h3 class="block-title-sm">Foco do dia</h3>
+              <button id="focus-suggest-btn" class="action-btn-sm" type="button">Sugerir</button>
+            </div>
+            <div id="focus-list" class="focus-list"></div>
+            <div class="focus-add">
+              <input id="focus-add-input" class="focus-input" type="text" placeholder="Adicionar foco manual...">
+              <button id="focus-add-btn" class="focus-add-btn" type="button">+</button>
+            </div>
+          </div>
+
+          <!-- FILA UNIFICADA DE ACAO -->
+          <div class="block">
+            <div class="block-header">
+              <h2 class="block-title">Fila de acao</h2>
+              <span id="queue-count" class="block-count"></span>
+            </div>
+            <div id="queue-filters" class="queue-filters">
+              <button class="queue-filter active" data-filter="all">Todos</button>
+              <button class="queue-filter" data-filter="respond">Responder</button>
+              <button class="queue-filter" data-filter="execute">Executar</button>
+              <button class="queue-filter" data-filter="decide">Decidir</button>
+              <button class="queue-filter" data-filter="follow_up">Acompanhar</button>
+            </div>
+            <div id="queue-list" class="queue-list"></div>
           </div>
         </div>
-        <div class="metric-card metric-orange">
-          <div class="metric-icon">✉</div>
-          <div class="metric-body">
-            <div class="metric-label">Emails</div>
-            <div id="metric-emails" class="metric-value">--</div>
-            <div class="metric-foot">não lidos</div>
+
+        <!-- COLUNA LATERAL -->
+        <div class="cockpit-side">
+          <!-- AGENDA DE HOJE -->
+          <div class="side-block">
+            <h3 class="side-title">Agenda de hoje</h3>
+            <div id="side-agenda" class="side-agenda"></div>
+          </div>
+
+          <!-- AGUARDANDO TERCEIROS -->
+          <div class="side-block">
+            <h3 class="side-title">Aguardando terceiros</h3>
+            <div id="side-waiting" class="side-list"></div>
+          </div>
+
+          <!-- RISCOS DA SEMANA -->
+          <div class="side-block">
+            <h3 class="side-title">Riscos da semana</h3>
+            <div id="side-risks" class="side-list"></div>
+          </div>
+
+          <!-- PREPARACAO DE REUNIOES -->
+          <div class="side-block">
+            <h3 class="side-title">Preparar reunioes</h3>
+            <div id="side-prep" class="side-list"></div>
           </div>
         </div>
-        <div class="metric-card metric-green">
-          <div class="metric-icon">📅</div>
-          <div class="metric-body">
-            <div class="metric-label">Agenda</div>
-            <div id="metric-events" class="metric-value">--</div>
-            <div class="metric-foot">compromissos hoje</div>
-          </div>
-        </div>
-        <div class="metric-card metric-blue">
-          <div class="metric-icon">◆</div>
-          <div class="metric-body">
-            <div class="metric-label">Projetos</div>
-            <div id="metric-projects" class="metric-value">--</div>
-            <div class="metric-foot">ativos</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ====== VIEW: HOJE ====== -->
-      <div id="view-hoje" class="ov-view">
-        <div class="ov-layout">
-          <!-- COLUNA PRINCIPAL (esquerda) -->
-          <div class="ov-col-main">
-            <!-- Foco do Dia -->
-            <div class="ov-block">
-              <div class="ov-block-header">
-                <h3 class="ov-block-title">Foco do Dia</h3>
-                <button id="focus-suggest-btn" class="ov-action-btn" type="button">Sugerir de novo</button>
-              </div>
-              <div id="focus-list" class="ov-focus-list"></div>
-              <div class="ov-focus-add">
-                <input id="focus-add-input" class="ov-focus-input" type="text" placeholder="Adicionar foco manual...">
-                <button id="focus-add-btn" class="ov-focus-add-btn" type="button">+</button>
-              </div>
-            </div>
-
-            <!-- Tarefas do Dia -->
-            <div class="ov-block">
-              <div class="ov-block-header">
-                <h3 class="ov-block-title">Tarefas do Dia</h3>
-                <button id="tarefas-expand-btn" class="ov-action-btn hidden" type="button">Ver todas atrasadas</button>
-              </div>
-              <div id="tarefas-dia-list" class="list"></div>
-            </div>
-
-            <!-- Caixa de Ação -->
-            <div class="ov-block">
-              <div class="ov-block-header">
-                <h3 class="ov-block-title">Caixa de Ação</h3>
-                <span id="caixa-acao-count" class="ov-block-count"></span>
-              </div>
-              <div id="caixa-acao-list" class="list"></div>
-            </div>
-          </div>
-
-          <!-- COLUNA LATERAL (direita) -->
-          <div class="ov-col-side">
-            <!-- Agenda de Hoje -->
-            <div class="ov-block">
-              <div class="ov-block-header">
-                <h3 class="ov-block-title">Agenda de Hoje</h3>
-              </div>
-              <div id="agenda-hoje-list" class="ov-agenda-list"></div>
-            </div>
-
-            <!-- Revisões agendadas -->
-            <div class="ov-block ov-block-compact">
-              <h3 class="ov-block-title">Revisões agendadas</h3>
-              <div id="revisoes-list" class="ov-mini-list"></div>
-            </div>
-
-            <!-- Projetos parados -->
-            <div class="ov-block ov-block-compact">
-              <h3 class="ov-block-title">Projetos parados</h3>
-              <div id="projetos-parados-list" class="ov-mini-list"></div>
-            </div>
-
-            <!-- Pessoas que aguardam resposta -->
-            <div class="ov-block ov-block-compact">
-              <h3 class="ov-block-title">Aguardando minha resposta</h3>
-              <div id="aguardando-list" class="ov-mini-list"></div>
-            </div>
-
-            <!-- Decisões do dia -->
-            <div class="ov-block ov-block-compact">
-              <h3 class="ov-block-title">Decisões do dia</h3>
-              <div id="decisoes-list" class="ov-mini-list"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ====== VIEW: SEMANA ====== -->
-      <div id="view-semana" class="ov-view hidden">
-        <div id="semana-grid" class="ov-semana-grid"></div>
       </div>
     </section>
 
-    <!-- PENDÊNCIAS -->
-    <section id="pending" class="section">
+    <!-- ====== SEMANA ====== -->
+    <section id="semana" class="section hidden">
       <div class="section-header">
-        <h2>Pendências</h2>
-        <span id="pending-badge" class="badge badge-purple">0</span>
+        <h2>Visao da semana</h2>
       </div>
-      <div id="pending-list" class="list"></div>
+      <div id="semana-grid" class="semana-grid"></div>
     </section>
 
-    <!-- BITRIX -->
-    <section id="bitrix" class="section">
+    <!-- ====== RESPOSTAS (filtro) ====== -->
+    <section id="respostas" class="section hidden">
+      <div class="section-header"><h2>Respostas pendentes</h2><span id="respostas-badge" class="badge badge-orange">0</span></div>
+      <div id="respostas-list" class="queue-list"></div>
+    </section>
+
+    <!-- ====== EXECUCAO (filtro) ====== -->
+    <section id="execucao" class="section hidden">
+      <div class="section-header"><h2>Para executar</h2><span id="execucao-badge" class="badge badge-blue">0</span></div>
+      <div id="execucao-list" class="queue-list"></div>
+    </section>
+
+    <!-- ====== AGUARDANDO ====== -->
+    <section id="aguardando" class="section hidden">
+      <div class="section-header"><h2>Aguardando terceiros</h2><span id="aguardando-badge" class="badge badge-purple">0</span></div>
+      <div id="aguardando-list" class="queue-list"></div>
+    </section>
+
+    <!-- ====== FONTES: BITRIX ====== -->
+    <section id="bitrix" class="section hidden">
       <div class="section-header">
         <h2>Tarefas do Bitrix</h2>
         <span id="bitrix-badge" class="badge badge-blue">0</span>
@@ -192,67 +167,45 @@
       <div id="bitrix-list" class="list"></div>
     </section>
 
-    <!-- EMAILS -->
-    <section id="emails" class="section">
+    <!-- ====== FONTES: EMAILS ====== -->
+    <section id="emails" class="section hidden">
       <div class="section-header">
-        <h2>Caixa de entrada do Bazinga</h2>
+        <h2>Caixa de entrada</h2>
         <span id="emails-badge" class="badge badge-orange">0</span>
         <button id="new-email-btn" class="section-action-btn" type="button">Novo email</button>
       </div>
       <div class="email-columns">
         <div class="email-column">
-          <div class="email-column-header">
-            <h3 class="sub-title">Caixa de entrada</h3>
-          </div>
+          <div class="email-column-header"><h3 class="sub-title">Inbox</h3></div>
           <div id="emails-list" class="list"></div>
         </div>
-
         <div class="email-column">
-          <div class="email-column-header">
-            <h3 class="sub-title">Últimos enviados</h3>
-          </div>
+          <div class="email-column-header"><h3 class="sub-title">Enviados</h3></div>
           <div id="emails-sent-list" class="list"></div>
         </div>
       </div>
     </section>
 
-    <!-- AGENDA -->
-    <section id="calendar" class="section">
+    <!-- ====== FONTES: AGENDA ====== -->
+    <section id="calendar" class="section hidden">
       <div class="section-header">
-        <h2>Próximos compromissos</h2>
+        <h2>Proximos compromissos</h2>
         <span id="calendar-badge" class="badge badge-green">0</span>
       </div>
       <div id="calendar-list" class="list"></div>
     </section>
 
-    <!-- PROJETOS -->
-    <section id="projects" class="section">
+    <!-- ====== FONTES: PROJETOS ====== -->
+    <section id="projects" class="section hidden">
       <div class="section-header">
         <h2>Projetos ativos</h2>
         <span id="projects-badge" class="badge badge-blue">0</span>
       </div>
       <div id="projects-list" class="card-grid"></div>
     </section>
-
-    <!-- AGENTES -->
-    <section id="agents" class="section">
-      <div class="section-header">
-        <h2>Agentes</h2>
-        <span id="agents-badge" class="badge badge-purple">0</span>
-      </div>
-      <div id="agents-list" class="card-grid"></div>
-    </section>
-
-    <!-- EQUIPE -->
-    <section id="team" class="section">
-      <div class="section-header">
-        <h2>Equipe Climoo</h2>
-        <span id="team-badge" class="badge badge-blue">0</span>
-      </div>
-      <div id="team-list" class="card-grid"></div>
-    </section>
   </main>
 
+  <!-- EMAIL MODAL -->
   <div id="email-modal" class="modal hidden" aria-hidden="true">
     <div id="email-modal-overlay" class="modal-overlay"></div>
     <div class="modal-card">
@@ -269,11 +222,7 @@
           <div class="email-reply-title">Responder pelo dashboard</div>
           <div id="email-reply-target" class="email-reply-target"></div>
         </div>
-        <textarea
-          id="email-reply-input"
-          class="email-reply-input"
-          placeholder="Escreva sua resposta aqui…"
-        ></textarea>
+        <textarea id="email-reply-input" class="email-reply-input" placeholder="Escreva sua resposta aqui..."></textarea>
         <div class="email-reply-actions">
           <div id="email-reply-feedback" class="email-reply-feedback"></div>
           <div class="email-reply-buttons">
@@ -286,6 +235,7 @@
     </div>
   </div>
 
+  <!-- COMPOSE MODAL -->
   <div id="compose-modal" class="modal hidden" aria-hidden="true">
     <div id="compose-modal-overlay" class="modal-overlay"></div>
     <div class="modal-card compose-card">
@@ -311,7 +261,7 @@
         </div>
         <div class="compose-field">
           <label class="compose-label" for="compose-body">Mensagem</label>
-          <textarea id="compose-body" class="compose-textarea" placeholder="Escreva sua mensagem aqui…"></textarea>
+          <textarea id="compose-body" class="compose-textarea" placeholder="Escreva sua mensagem aqui..."></textarea>
         </div>
         <div class="email-reply-actions">
           <div id="compose-feedback" class="email-reply-feedback"></div>

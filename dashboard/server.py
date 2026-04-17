@@ -27,10 +27,12 @@ try:
     from .env_loader import load_dotenv
     from .sync import collect_dashboard_snapshot, get_dataset_payload, get_google_services
     from . import focus as focus_mod
+    from .decision_engine import build_decision_items
 except ImportError:
     from env_loader import load_dotenv
     from sync import collect_dashboard_snapshot, get_dataset_payload, get_google_services
     import focus as focus_mod
+    from decision_engine import build_decision_items
 
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT.parent / ".env")
@@ -370,6 +372,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route_path == "/api/meta":
             self._serve_dataset("meta")
             return
+        if route_path == "/api/decision-items":
+            self._decision_items()
+            return
         if route_path == "/api/focus":
             self._focus_get(parsed)
             return
@@ -448,7 +453,19 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def _bootstrap(self):
-        snapshot = load_snapshot()
+        # Non-blocking: try cached data first, then attempt load with timeout
+        snapshot = SNAPSHOT_CACHE.get("data")
+        if snapshot is None:
+            acquired = SNAPSHOT_LOCK.acquire(timeout=2)
+            if acquired:
+                try:
+                    snapshot = collect_dashboard_snapshot()
+                    SNAPSHOT_CACHE["data"] = snapshot
+                    SNAPSHOT_CACHE["updated_at"] = time.time()
+                finally:
+                    SNAPSHOT_LOCK.release()
+            else:
+                snapshot = {}
         json_response(self, 200, {"ok": True, "datasets": snapshot})
 
     def _run_sync(self):
@@ -749,6 +766,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 body=body,
             )
             json_response(self, 200, {"ok": True, "suggestion": suggestion})
+        except Exception as e:
+            json_response(self, 500, {"ok": False, "error": str(e)})
+
+    def _decision_items(self):
+        try:
+            # Use cached snapshot without waiting for lock (non-blocking)
+            snapshot = SNAPSHOT_CACHE.get("data")
+            if snapshot is None:
+                snapshot = load_snapshot()
+            result = build_decision_items(snapshot)
+            json_response(self, 200, {"ok": True, **result})
         except Exception as e:
             json_response(self, 500, {"ok": False, "error": str(e)})
 
